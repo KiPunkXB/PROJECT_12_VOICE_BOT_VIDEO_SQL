@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from aiogram import Bot, Dispatcher
 
@@ -14,6 +15,17 @@ from pathlib import Path
 async def main() -> None:
     load_dotenv_if_exists(Path(__file__).resolve().parents[2])
     settings = get_settings()
+    logging.basicConfig(
+        level=getattr(logging, settings.log_level, logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "Bot startup: llm_parser_enabled=%s, openai_key_present=%s, llm_debug_logging=%s",
+        settings.llm_parser_enabled,
+        bool(settings.openai_api_key),
+        settings.llm_debug_logging,
+    )
     if not settings.telegram_bot_token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is required in environment")
 

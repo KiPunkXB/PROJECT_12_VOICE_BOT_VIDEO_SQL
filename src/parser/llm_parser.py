@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -8,6 +9,8 @@ from openai import AsyncOpenAI
 
 from src.core.config import Settings
 from src.parser.intents import Intent, IntentType
+
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = """Ты NLU-парсер запросов к аналитике видео.
@@ -94,8 +97,16 @@ def _payload_to_intent(payload: dict[str, Any]) -> Intent:
 
 async def parse_intent_with_llm(text: str, settings: Settings) -> Intent:
     if not settings.llm_parser_enabled or not settings.openai_api_key:
+        if settings.llm_debug_logging:
+            logger.warning(
+                "LLM fallback skipped: llm_parser_enabled=%s openai_key_present=%s",
+                settings.llm_parser_enabled,
+                bool(settings.openai_api_key),
+            )
         return Intent(IntentType.UNKNOWN, {})
 
+    if settings.llm_debug_logging:
+        logger.info("LLM request text=%r model=%s", text, settings.openai_model)
     client = AsyncOpenAI(api_key=settings.openai_api_key)
     try:
         response = await client.chat.completions.create(
@@ -107,14 +118,25 @@ async def parse_intent_with_llm(text: str, settings: Settings) -> Intent:
                 {"role": "user", "content": text},
             ],
         )
-    except Exception:
+    except Exception as exc:
+        if settings.llm_debug_logging:
+            logger.exception("LLM request failed: %s", exc)
         return Intent(IntentType.UNKNOWN, {})
 
     content = response.choices[0].message.content or "{}"
+    if settings.llm_debug_logging:
+        logger.info("LLM raw response content=%s", content[:1200])
     try:
         payload = json.loads(content)
     except json.JSONDecodeError:
+        if settings.llm_debug_logging:
+            logger.warning("LLM response is not valid JSON")
         return Intent(IntentType.UNKNOWN, {})
     if not isinstance(payload, dict):
+        if settings.llm_debug_logging:
+            logger.warning("LLM JSON payload is not object: type=%s", type(payload).__name__)
         return Intent(IntentType.UNKNOWN, {})
-    return _payload_to_intent(payload)
+    intent = _payload_to_intent(payload)
+    if settings.llm_debug_logging:
+        logger.info("LLM parsed intent=%s payload=%s", intent.intent_type.value, payload)
+    return intent

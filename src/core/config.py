@@ -12,6 +12,8 @@ class Settings:
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     llm_parser_enabled: bool = True
+    log_level: str = "INFO"
+    llm_debug_logging: bool = False
 
 
 def get_settings() -> Settings:
@@ -24,6 +26,9 @@ def get_settings() -> Settings:
     timeout = float(timeout_raw)
     llm_enabled_raw = os.getenv("LLM_PARSER_ENABLED", "1").strip().lower()
     llm_enabled = llm_enabled_raw not in {"0", "false", "no", "off"}
+    llm_debug_raw = os.getenv("LLM_DEBUG_LOGGING", "0").strip().lower()
+    llm_debug_logging = llm_debug_raw in {"1", "true", "yes", "on"}
+    log_level = (os.getenv("LOG_LEVEL", "INFO").strip() or "INFO").upper()
     return Settings(
         telegram_bot_token=token,
         database_url=database_url,
@@ -31,4 +36,6 @@ def get_settings() -> Settings:
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini",
         llm_parser_enabled=llm_enabled,
+        log_level=log_level,
+        llm_debug_logging=llm_debug_logging,
     )

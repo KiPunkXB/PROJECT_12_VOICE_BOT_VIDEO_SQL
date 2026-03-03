@@ -54,6 +54,15 @@ async def execute_intent(
                 return "Нет данных"
             metric = intent.params.get("metric", "")
             order = intent.params.get("order", "ASC")
+            limit = intent.params.get("limit")
+            # limit=1 + DESC = "в какой день максимум" → возвращаем дату строкой
+            if limit == 1 and order == "DESC":
+                day_str = str(rows[0]["day"])[:10]  # YYYY-MM-DD
+                try:
+                    y, m, d = day_str.split("-")
+                    return f"{d}.{m}.{y}"
+                except ValueError:
+                    return day_str
             return [
                 {"day": str(r["day"]), "value": int(r["value"]), "_result_type": "time_series", "_metric": metric, "_order": order}
                 for r in rows

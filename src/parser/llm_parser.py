@@ -9,7 +9,12 @@ from openai import AsyncOpenAI
 
 from src.core.config import Settings
 from src.parser.intents import Intent, IntentType
-from src.sql.queries import ALLOWED_METRICS, ALLOWED_OPERATIONS
+from src.sql.queries import (
+    ALLOWED_METRICS,
+    ALLOWED_OPERATIONS,
+    ALLOWED_TOP_CREATOR_METRICS,
+    ALLOWED_TIME_SERIES_METRICS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +23,9 @@ Return ONLY JSON with one of intent_type:
 - AGGREGATE
 - LOOKUP_ID
 - VIDEO_DATE_RANGE
+- VIDEO_DETAIL
+- TOP_CREATORS
+- TIME_SERIES
 - UNKNOWN
 
 AGGREGATE format:
@@ -29,23 +37,36 @@ LOOKUP_ID format:
 VIDEO_DATE_RANGE format:
 {"intent_type":"VIDEO_DATE_RANGE"}
 
+VIDEO_DETAIL format:
+{"intent_type":"VIDEO_DETAIL","video_id":"<uuid>"}
+
+TOP_CREATORS format:
+{"intent_type":"TOP_CREATORS","metric":"count|views_count|likes_count|comments_count|reports_count","limit":10,"filters":{"date_from":null,"date_to":null}}
+
+TIME_SERIES format:
+{"intent_type":"TIME_SERIES","metric":"delta_views_count|delta_likes_count|delta_comments_count|delta_reports_count","filters":{"date_from":"YYYY-MM-DD","date_to":"YYYY-MM-DD"},"limit":null,"order":"ASC|DESC"}
+
 UNKNOWN format:
 {"intent_type":"UNKNOWN"}
 
 Rules:
 1) No SQL text, JSON only.
 2) If unsure -> UNKNOWN.
-3) If query asks ONLY the date range (period) of all videos in DB -> VIDEO_DATE_RANGE. "Список/динамика/покажи/расскажи" → UNKNOWN.
+3) If query asks ONLY the date range (period) of all videos in DB -> VIDEO_DATE_RANGE. "Список/покажи все" → UNKNOWN.
 4) growth/increase/new views -> metric delta_* in video_snapshots.
 5) if month mentioned without year, use 2025.
 6) UUID with dashes => video_id; 32-char hex => creator_id.
-7) "Кто/какой автор/создатель/топ автор/самый популярный автор" → LOOKUP_ID id_field=creator_id. "Какое видео/топ видео по X/самое X видео" → LOOKUP_ID id_field=id.
-8) "Сколько видео создал/выпустил/опубликовал автор X" → AGGREGATE COUNT(*), NOT LOOKUP_ID.
-9) EXACT field names only: views_count, likes_count, comments_count, reports_count, delta_views_count, delta_likes_count, delta_comments_count, delta_reports_count. Never use shortened names (NOT "likes", NOT "delta_views").
-10) "без X" (no X / without X) → filter_eq_field=X_count, filter_eq_value=0.
-11) "с X / с жалобами / с лайками" (has at least some X) → filter_field=X_count, filter_gt=0.
-12) "сколько просмотров/лайков/комментариев/жалоб" (total metric, not video count) → AGGREGATE SUM(X_count) from videos.
-13) "максимальное/минимальное количество X у одного видео" → AGGREGATE MAX/MIN(X_count), NOT LOOKUP_ID.
+7) "Кто/какой автор/самый популярный автор" (ONE result) → LOOKUP_ID id_field=creator_id. "Какое видео/топ видео по X/самое X видео" → LOOKUP_ID id_field=id.
+8) "Сколько видео создал/выпустил автор X" → AGGREGATE COUNT(*), NOT LOOKUP_ID.
+9) EXACT field names: views_count, likes_count, comments_count, reports_count, delta_views_count, delta_likes_count, delta_comments_count, delta_reports_count.
+10) "без X" → filter_eq_field=X_count, filter_eq_value=0.
+11) "с X / с жалобами" → filter_field=X_count, filter_gt=0.
+12) "сколько просмотров/лайков/комментариев/жалоб" → AGGREGATE SUM(X_count).
+13) "максимальное/минимальное количество X у одного видео" → AGGREGATE MAX/MIN(X_count).
+14) "топ N авторов по X" (explicit N or plural "авторов") → TOP_CREATORS. Single "какой автор" → LOOKUP_ID.
+15) "динамика / по дням / прирост по дням" → TIME_SERIES (date_from+date_to required). "В какой день макс" → TIME_SERIES limit=1 order=DESC.
+16) "статистика/покажи/расскажи про видео <UUID>" → VIDEO_DETAIL with video_id.
+17) TIME_SERIES without dates → UNKNOWN.
 
 Examples:
 "какой создатель выпустил больше всего видео"
@@ -103,7 +124,40 @@ Examples:
 {"intent_type":"UNKNOWN"}
 
 "динамика просмотров по дням за ноябрь"
+{"intent_type":"TIME_SERIES","metric":"delta_views_count","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"},"limit":null,"order":"ASC"}
+
+"прирост лайков по дням за октябрь 2025"
+{"intent_type":"TIME_SERIES","metric":"delta_likes_count","filters":{"date_from":"2025-10-01","date_to":"2025-10-31"},"limit":null,"order":"ASC"}
+
+"в какой день был максимальный прирост просмотров за ноябрь"
+{"intent_type":"TIME_SERIES","metric":"delta_views_count","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"},"limit":1,"order":"DESC"}
+
+"самый активный день по лайкам за октябрь"
+{"intent_type":"TIME_SERIES","metric":"delta_likes_count","filters":{"date_from":"2025-10-01","date_to":"2025-10-31"},"limit":1,"order":"DESC"}
+
+"динамика без дат"
 {"intent_type":"UNKNOWN"}
+
+"топ 5 авторов по лайкам"
+{"intent_type":"TOP_CREATORS","metric":"likes_count","limit":5,"filters":{}}
+
+"топ 3 автора по просмотрам за ноябрь"
+{"intent_type":"TOP_CREATORS","metric":"views_count","limit":3,"filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
+
+"у каких авторов больше всего видео"
+{"intent_type":"TOP_CREATORS","metric":"count","limit":10,"filters":{}}
+
+"топ 10 авторов по жалобам"
+{"intent_type":"TOP_CREATORS","metric":"reports_count","limit":10,"filters":{}}
+
+"покажи статистику видео ecd8a4e4-1f24-4b0a-9c3d-000000000000"
+{"intent_type":"VIDEO_DETAIL","video_id":"ecd8a4e4-1f24-4b0a-9c3d-000000000000"}
+
+"расскажи про видео abc-123"
+{"intent_type":"VIDEO_DETAIL","video_id":"abc-123"}
+
+"что у видео fde42b07-37f4-4db7-95b4-d850a5e78693"
+{"intent_type":"VIDEO_DETAIL","video_id":"fde42b07-37f4-4db7-95b4-d850a5e78693"}
 
 "сколько всего авторов"
 {"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"creator_id","table":"videos","filters":{}}
@@ -151,12 +205,13 @@ Table video_snapshots (hourly measurements):
 
 ━━━━━━━━━━━━━━━━━ INTENT TYPES ━━━━━━━━━━━━━━━━━━━━━━
 
-The bot always returns ONE value — a number or ID.
-
 1. AGGREGATE — aggregation, returns one number
 2. LOOKUP_ID — returns one ID (creator_id or video id)
 3. VIDEO_DATE_RANGE — global date range of all videos in DB
-4. UNKNOWN — query is not about video analytics
+4. VIDEO_DETAIL — all fields of ONE video by ID
+5. TOP_CREATORS — list of top N creators grouped by metric
+6. TIME_SERIES — daily totals of a delta metric over a date range
+7. UNKNOWN — query is not about video analytics
 
 ━━━━━━━━━━━━━━━━━ RESPONSE FORMATS ━━━━━━━━━━━━━━━━━━
 
@@ -171,6 +226,15 @@ LOOKUP_ID (returns video id with max metric):
 
 VIDEO_DATE_RANGE:
 {"intent_type":"VIDEO_DATE_RANGE"}
+
+VIDEO_DETAIL:
+{"intent_type":"VIDEO_DETAIL","video_id":"<id>"}
+
+TOP_CREATORS:
+{"intent_type":"TOP_CREATORS","metric":"count|views_count|likes_count|comments_count|reports_count","limit":10,"filters":{"date_from":null,"date_to":null}}
+
+TIME_SERIES:
+{"intent_type":"TIME_SERIES","metric":"delta_views_count|delta_likes_count|delta_comments_count|delta_reports_count","filters":{"date_from":"YYYY-MM-DD","date_to":"YYYY-MM-DD"},"limit":null,"order":"ASC|DESC"}
 
 UNKNOWN:
 {"intent_type":"UNKNOWN"}
@@ -209,6 +273,10 @@ UNKNOWN:
 24) "Average number of snapshots per video" → AGGREGATE, operation=AVG, metric=snapshot_count, table=video_snapshots. Never use metric="*" with operation=AVG.
 25) "How many distinct days did creator X publish videos" → AGGREGATE, operation=COUNT_DISTINCT, metric=publish_date, table=videos, filters with creator_id and/or dates.
 26) "When was video UUID published/released", "publish date of video UUID" → AGGREGATE, operation=MIN, metric=video_created_at, table=videos, filters={video_id: UUID}. Do NOT use VIDEO_DATE_RANGE for such queries! VIDEO_DATE_RANGE is ONLY the global date range of all videos without a specific video.
+27) "Статистика/расскажи/покажи про видео <ID>", "что у видео <ID>" → VIDEO_DETAIL with video_id=<ID>.
+28) "Топ N авторов по X", "у каких авторов больше всего X" (result is a list of authors) → TOP_CREATORS. metric=count for video count, metric=X_count for metric. limit=N (default 10). "Какой автор/кто" (single result) → LOOKUP_ID.
+29) "Динамика/прирост X по дням за [период]" → TIME_SERIES. metric=delta_X_count. date_from+date_to required (YYYY-MM-DD). order=ASC (default) or DESC. limit optional (use for "в какой день макс" → limit=1 order=DESC).
+30) TIME_SERIES without explicit date range → UNKNOWN.
 
 ━━━━━━━━━━━━━━━━━ ПРИМЕРЫ ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -443,6 +511,45 @@ Query: "когда было опубликовано видео abc1-2345-6789-a
 Query: "когда вышло видео ecd8a4e4-1f24-4b0a-9c3d-000000000000"
 {"intent_type":"AGGREGATE","operation":"MIN","metric":"video_created_at","table":"videos","filters":{"video_id":"ecd8a4e4-1f24-4b0a-9c3d-000000000000"}}
 
+Query: "покажи статистику видео ecd8a4e4-1f24-4b0a-9c3d-000000000000"
+{"intent_type":"VIDEO_DETAIL","video_id":"ecd8a4e4-1f24-4b0a-9c3d-000000000000"}
+
+Query: "расскажи про видео abc-123"
+{"intent_type":"VIDEO_DETAIL","video_id":"abc-123"}
+
+Query: "что у видео fde42b07-37f4-4db7-95b4-d850a5e78693"
+{"intent_type":"VIDEO_DETAIL","video_id":"fde42b07-37f4-4db7-95b4-d850a5e78693"}
+
+Query: "топ 5 авторов по лайкам"
+{"intent_type":"TOP_CREATORS","metric":"likes_count","limit":5,"filters":{}}
+
+Query: "топ 3 автора по просмотрам за ноябрь"
+{"intent_type":"TOP_CREATORS","metric":"views_count","limit":3,"filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
+
+Query: "у каких авторов больше всего видео"
+{"intent_type":"TOP_CREATORS","metric":"count","limit":10,"filters":{}}
+
+Query: "топ 10 авторов по жалобам"
+{"intent_type":"TOP_CREATORS","metric":"reports_count","limit":10,"filters":{}}
+
+Query: "топ 7 авторов по комментариям за октябрь"
+{"intent_type":"TOP_CREATORS","metric":"comments_count","limit":7,"filters":{"date_from":"2025-10-01","date_to":"2025-10-31"}}
+
+Query: "динамика просмотров по дням за ноябрь"
+{"intent_type":"TIME_SERIES","metric":"delta_views_count","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"},"limit":null,"order":"ASC"}
+
+Query: "прирост лайков по дням за октябрь 2025"
+{"intent_type":"TIME_SERIES","metric":"delta_likes_count","filters":{"date_from":"2025-10-01","date_to":"2025-10-31"},"limit":null,"order":"ASC"}
+
+Query: "в какой день был максимальный прирост просмотров за ноябрь"
+{"intent_type":"TIME_SERIES","metric":"delta_views_count","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"},"limit":1,"order":"DESC"}
+
+Query: "самый активный день по лайкам за октябрь"
+{"intent_type":"TIME_SERIES","metric":"delta_likes_count","filters":{"date_from":"2025-10-01","date_to":"2025-10-31"},"limit":1,"order":"DESC"}
+
+Query: "динамика просмотров"
+{"intent_type":"UNKNOWN"}
+
 Query: "погода в москве"
 {"intent_type":"UNKNOWN"}
 
@@ -600,6 +707,53 @@ def _payload_to_intent(payload: dict[str, Any]) -> Intent:
             return _UNKNOWN_INTENT
         params["filters"] = filters
         return Intent(intent_type, params)
+
+    if intent_type == IntentType.VIDEO_DETAIL:
+        video_id = str(payload.get("video_id", "")).strip()
+        if not video_id:
+            return _UNKNOWN_INTENT
+        return Intent(intent_type, {"video_id": video_id})
+
+    if intent_type == IntentType.TOP_CREATORS:
+        metric = str(payload.get("metric", "count")).strip()
+        if metric not in ALLOWED_TOP_CREATOR_METRICS:
+            return _UNKNOWN_INTENT
+        limit_raw = payload.get("limit", 10)
+        try:
+            limit = max(1, min(50, int(limit_raw)))
+        except (TypeError, ValueError):
+            limit = 10
+        raw_filters = payload.get("filters") or {}
+        filters = _parse_filters(raw_filters)
+        if filters is None:
+            return _UNKNOWN_INTENT
+        return Intent(intent_type, {"metric": metric, "limit": limit, "filters": filters})
+
+    if intent_type == IntentType.TIME_SERIES:
+        metric = str(payload.get("metric", "")).strip()
+        if metric not in ALLOWED_TIME_SERIES_METRICS:
+            return _UNKNOWN_INTENT
+        raw_filters = payload.get("filters") or {}
+        filters = _parse_filters(raw_filters)
+        if filters is None:
+            return _UNKNOWN_INTENT
+        # date range is required for TIME_SERIES
+        if not filters.get("date_from") or not filters.get("date_to"):
+            return _UNKNOWN_INTENT
+        limit_raw = payload.get("limit")
+        limit: int | None = None
+        if limit_raw is not None:
+            try:
+                limit = max(1, min(30, int(limit_raw)))
+            except (TypeError, ValueError):
+                limit = None
+        order = str(payload.get("order", "ASC")).upper()
+        if order not in {"ASC", "DESC"}:
+            order = "ASC"
+        ts_params: dict[str, Any] = {"metric": metric, "filters": filters, "order": order}
+        if limit is not None:
+            ts_params["limit"] = limit
+        return Intent(intent_type, ts_params)
 
     return _UNKNOWN_INTENT
 

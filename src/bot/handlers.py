@@ -8,7 +8,12 @@ from aiogram.types import Message
 logger = logging.getLogger(__name__)
 
 from src.core.config import Settings
-from src.bot.formatting import format_numeric_response
+from src.bot.formatting import (
+    format_numeric_response,
+    format_video_detail,
+    format_top_creators,
+    format_time_series,
+)
 from src.parser.hybrid_parser import parse_intent_hybrid
 from src.parser.intents import IntentType
 from src.sql.engine import execute_intent
@@ -33,7 +38,7 @@ START_MESSAGE = (
 
 HELP_MESSAGE = (
     "📌 Полный гайд по боту аналитики\n"
-    "Бот всегда возвращает одно число или ID.\n\n"
+    "Бот возвращает число, ID, карточку видео или список.\n\n"
 
     "━━━ 📊 МЕТРИКИ ━━━\n"
     "Итоговые (накоплено за всё время):\n"
@@ -88,7 +93,16 @@ HELP_MESSAGE = (
     "  Какое видео получило больше всего жалоб?\n\n"
     "Диапазон дат:\n"
     "  За какой период есть видео?\n"
-    "  Диапазон дат видео в базе"
+    "  Диапазон дат видео в базе\n\n"
+    "Топ авторов:\n"
+    "  Топ 5 авторов по лайкам\n"
+    "  Топ 3 автора по просмотрам за ноябрь\n\n"
+    "Динамика по дням:\n"
+    "  Динамика просмотров по дням за ноябрь\n"
+    "  В какой день был максимальный прирост лайков?\n\n"
+    "Карточка видео:\n"
+    "  Статистика видео <UUID>\n"
+    "  Покажи видео <UUID>"
 )
 
 
@@ -121,7 +135,20 @@ def build_router(pool, settings: Settings) -> Router:
             await message.answer("⚠️ Не удалось выполнить запрос. Попробуй переформулировать.")
             return
 
-        if isinstance(value, (int, float)):
+        if isinstance(value, dict):
+            await message.answer(format_video_detail(value))
+        elif isinstance(value, list):
+            if not value:
+                await message.answer("Нет данных")
+            else:
+                rtype = value[0].get("_result_type", "")
+                if rtype == "top_creators":
+                    await message.answer(format_top_creators(value))
+                elif rtype == "time_series":
+                    await message.answer(format_time_series(value))
+                else:
+                    await message.answer("Нет данных")
+        elif isinstance(value, (int, float)):
             await message.answer(format_numeric_response(value))
         else:
             await message.answer(str(value))

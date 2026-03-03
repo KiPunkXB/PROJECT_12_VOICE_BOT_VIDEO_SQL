@@ -62,6 +62,17 @@ VIRTUAL_METRIC_EXPR: dict[str, str] = {
     "publish_date": "video_created_at::date",
 }
 
+# Допустимые метрики для TOP_CREATORS (metric="count" → COUNT(*), иначе SUM(metric))
+ALLOWED_TOP_CREATOR_METRICS: set[str] = {
+    "count", "views_count", "likes_count", "comments_count", "reports_count",
+}
+
+# Допустимые метрики для TIME_SERIES (только delta_*)
+ALLOWED_TIME_SERIES_METRICS: set[str] = {
+    "delta_views_count", "delta_likes_count",
+    "delta_comments_count", "delta_reports_count",
+}
+
 
 # ─── Вспомогательные функции ──────────────────────────────────────────────────
 
@@ -334,5 +345,59 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
             """,
             (),
         )
+
+    if itype == IntentType.VIDEO_DETAIL:
+        video_id: str = params["video_id"]
+        query = (
+            "SELECT id, creator_id, video_created_at, views_count, likes_count, "
+            "comments_count, reports_count FROM videos WHERE id = $1;"
+        )
+        return query, (video_id,)
+
+    if itype == IntentType.TOP_CREATORS:
+        metric: str = params["metric"]
+        limit: int = int(params.get("limit", 10))
+        filters: dict = params.get("filters", {})
+
+        if metric not in ALLOWED_TOP_CREATOR_METRICS:
+            raise ValueError(f"Unknown TOP_CREATORS metric: {metric!r}")
+
+        where, values, i = _build_where("videos", filters)
+
+        if metric == "count":
+            select = "SELECT creator_id, COUNT(*) AS value"
+        else:
+            select = f"SELECT creator_id, SUM({metric}) AS value"
+
+        values.append(limit)
+        query = (
+            f"{select} FROM videos{where} "
+            f"GROUP BY creator_id ORDER BY value DESC LIMIT ${i};"
+        )
+        return query, tuple(values)
+
+    if itype == IntentType.TIME_SERIES:
+        metric: str = params["metric"]
+        filters: dict = params.get("filters", {})
+        limit: int | None = params.get("limit")
+        order: str = str(params.get("order", "ASC")).upper()
+
+        if metric not in ALLOWED_TIME_SERIES_METRICS:
+            raise ValueError(f"Unknown TIME_SERIES metric: {metric!r}")
+        if order not in {"ASC", "DESC"}:
+            order = "ASC"
+
+        where, values, i = _build_where("video_snapshots", filters)
+        parts = [
+            f"SELECT created_at::date AS day, SUM({metric}) AS value",
+            f"FROM video_snapshots{where}",
+            "GROUP BY day",
+            f"ORDER BY day {order}",
+        ]
+        if limit is not None:
+            values.append(int(limit))
+            parts.append(f"LIMIT ${i}")
+        query = " ".join(parts) + ";"
+        return query, tuple(values)
 
     raise ValueError(f"Unsupported intent type: {itype}")

@@ -15,6 +15,8 @@ ALLOWED_METRICS: dict[str, set[str]] = {
         "reports_count",
         # virtual: video_created_at::date (для COUNT DISTINCT по дням публикаций)
         "publish_date",
+        # дата публикации (используется для возврата даты конкретного видео)
+        "video_created_at",
     },
     "video_snapshots": {
         "*",
@@ -283,7 +285,11 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
             else:
                 select = f"SELECT {operation}({metric_expr})"
             where, values, _ = _build_where(table, filters)
-            query = f"{select}::bigint FROM {table}{where};"
+            # video_created_at возвращает дату — нельзя кастовать в bigint
+            if metric == "video_created_at":
+                query = f"{select}::date FROM {table}{where};"
+            else:
+                query = f"{select}::bigint FROM {table}{where};"
 
         return query, tuple(values)
 

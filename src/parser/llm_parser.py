@@ -100,6 +100,7 @@ UNKNOWN:
 23) hour_from и hour_to — целые числа 0–23, фильтр по часу замера в video_snapshots ("с 10:00 до 15:00" → hour_from=10, hour_to=15; верхняя граница исключительно: охватывает 10, 11, 12, 13, 14). Обязательно оба поля вместе.
 24) "Среднее количество замеров на видео" → AGGREGATE, operation=AVG, metric=snapshot_count, table=video_snapshots. Никогда не используй metric="*" с operation=AVG.
 25) "В скольких разных днях/датах публиковал видео создатель X" → AGGREGATE, operation=COUNT_DISTINCT, metric=publish_date, table=videos, filters с creator_id и/или датами.
+26) "Когда вышло/опубликовано видео UUID", "дата публикации видео UUID" → AGGREGATE, operation=MIN, metric=video_created_at, table=videos, filters={video_id: UUID}. НЕ используй VIDEO_DATE_RANGE для таких запросов! VIDEO_DATE_RANGE — ТОЛЬКО глобальный диапазон всех видео в базе без указания конкретного видео.
 
 ━━━━━━━━━━━━━━━━━ ПРИМЕРЫ ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -339,6 +340,18 @@ UNKNOWN:
 
 Запрос: "среднее число замеров за ноябрь на видео"
 {"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
+
+Запрос: "fde42b07-37f4-4db7-95b4-d850a5e78693 когда вышло"
+{"intent_type":"AGGREGATE","operation":"MIN","metric":"video_created_at","table":"videos","filters":{"video_id":"fde42b07-37f4-4db7-95b4-d850a5e78693"}}
+
+Запрос: "когда было опубликовано видео abc1-2345-6789-abcd-000000000000"
+{"intent_type":"AGGREGATE","operation":"MIN","metric":"video_created_at","table":"videos","filters":{"video_id":"abc1-2345-6789-abcd-000000000000"}}
+
+Запрос: "дата публикации видео fde42b07-37f4-4db7-95b4-d850a5e78693"
+{"intent_type":"AGGREGATE","operation":"MIN","metric":"video_created_at","table":"videos","filters":{"video_id":"fde42b07-37f4-4db7-95b4-d850a5e78693"}}
+
+Запрос: "когда вышло видео ecd8a4e4-1f24-4b0a-9c3d-000000000000"
+{"intent_type":"AGGREGATE","operation":"MIN","metric":"video_created_at","table":"videos","filters":{"video_id":"ecd8a4e4-1f24-4b0a-9c3d-000000000000"}}
 
 Запрос: "погода в москве"
 {"intent_type":"UNKNOWN"}

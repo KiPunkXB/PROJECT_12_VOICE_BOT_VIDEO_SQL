@@ -30,8 +30,13 @@ async def execute_intent(
                 return "Нет данных"
             return str(value)
 
-        # AGGREGATE → одно число
+        # AGGREGATE → одно число (или дата-строка для video_created_at)
         value = await connection.fetchval(query, *params, timeout=sql_timeout_seconds)
+        metric = intent.params.get("metric", "")
+        if metric == "video_created_at":
+            if value is None:
+                return "Нет данных"
+            return str(value)
         if value is None:
             # SUM/AVG возвращают NULL при отсутствии строк; COUNT всегда возвращает число
             return 0  # COUNT(*) = 0 при пустом наборе; SUM/AVG без строк тоже даём 0

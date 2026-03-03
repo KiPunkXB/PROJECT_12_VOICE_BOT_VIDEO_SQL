@@ -36,31 +36,49 @@ MONTHS_PREP_RU = {
 }
 
 MONTHS_ANY_RU = {
+    # Nominative (used after "за", "в", standalone)
+    "январь": 1,
+    "февраль": 2,
+    "март": 3,
+    "апрель": 4,
+    "май": 5,
+    "июнь": 6,
+    "июль": 7,
+    "август": 8,
+    "сентябрь": 9,
+    "октябрь": 10,
+    "ноябрь": 11,
+    "декабрь": 12,
+    # Genitive
     "января": 1,
-    "январе": 1,
     "февраля": 2,
-    "феврале": 2,
     "марта": 3,
-    "марте": 3,
     "апреля": 4,
-    "апреле": 4,
     "мая": 5,
-    "мае": 5,
     "июня": 6,
-    "июне": 6,
     "июля": 7,
-    "июле": 7,
     "августа": 8,
-    "августе": 8,
     "сентября": 9,
-    "сентябре": 9,
     "октября": 10,
-    "октябре": 10,
     "ноября": 11,
-    "ноябре": 11,
     "декабря": 12,
+    # Prepositional
+    "январе": 1,
+    "феврале": 2,
+    "марте": 3,
+    "апреле": 4,
+    "мае": 5,
+    "июне": 6,
+    "июле": 7,
+    "августе": 8,
+    "сентябре": 9,
+    "октябре": 10,
+    "ноябре": 11,
     "декабре": 12,
 }
+
+# Pattern built from all forms, longest first to avoid partial matches
+_MONTHS_ANY_PATTERN = "|".join(sorted(MONTHS_ANY_RU.keys(), key=len, reverse=True))
 
 
 def normalize_text(text: str) -> str:
@@ -146,7 +164,7 @@ def parse_month_range(text: str) -> tuple[datetime, datetime] | None:
 
 def parse_month_range_any_case(text: str) -> tuple[datetime, datetime] | None:
     month_match = re.search(
-        r"(январ[яе]|феврал[яе]|март[ае]|апрел[яе]|ма[яе]|июн[яе]|июл[яе]|август[ае]|сентябр[яе]|октябр[яе]|ноябр[яе]|декабр[яе])(?:\s+(\d{4}))?",
+        rf"({_MONTHS_ANY_PATTERN})(?:\s+(\d{{4}}))?",
         text,
     )
     if not month_match:
@@ -254,8 +272,14 @@ def parse_intent(text: str) -> Intent:
                 },
             )
 
-    # Rule 4: COUNT snapshots with negative deltas
-    if "замер" in normalized and ("отрицательн" in normalized or "меньше" in normalized):
+    # Rule 4: COUNT snapshots with negative deltas ("отрицательный прирост" or "меньше 0/нуля")
+    # Note: plain "меньше" without "0/нуля" is handled by LLM (arbitrary threshold)
+    if "замер" in normalized and (
+        "отрицательн" in normalized
+        or "меньше 0" in normalized
+        or "меньше нуля" in normalized
+        or "ниже нуля" in normalized
+    ):
         delta_field = None
         if "просмотр" in normalized:
             delta_field = "delta_views_count"
@@ -296,7 +320,7 @@ def parse_intent(text: str) -> Intent:
                 params={"operation": "COUNT", "metric": "*", "table": "videos", "filters": {}},
             )
 
-    # Rule 6: SUM all views
+    # Rule 6: SUM all views (with optional date filter)
     if (
         "просмотр" in normalized
         and (
@@ -306,9 +330,14 @@ def parse_intent(text: str) -> Intent:
             or "сколько просмотров на платформе" in normalized
         )
     ):
+        filters: dict = {}
+        month_range = parse_month_range_any_case(normalized)
+        if month_range is not None:
+            start, end = month_range
+            filters = {"date_from": start, "date_to": end}
         return Intent(
             intent_type=IntentType.AGGREGATE,
-            params={"operation": "SUM", "metric": "views_count", "table": "videos", "filters": {}},
+            params={"operation": "SUM", "metric": "views_count", "table": "videos", "filters": filters},
         )
 
     # Rule 7: COUNT videos with views > N
@@ -379,6 +408,22 @@ def parse_intent(text: str) -> Intent:
                     "metric": "*",
                     "table": "videos",
                     "filters": {"creator_id": creator_id, "date_from": start, "date_to": end},
+                },
+            )
+
+    # Rule 11a: COUNT DISTINCT videos that had snapshots in a month
+    # "сколько видео имели замеры в ноябре" → video_snapshots
+    if "замер" in normalized and "видео" in normalized:
+        month_range = parse_month_range_any_case(normalized)
+        if month_range is not None:
+            start, end = month_range
+            return Intent(
+                intent_type=IntentType.AGGREGATE,
+                params={
+                    "operation": "COUNT_DISTINCT",
+                    "metric": "video_id",
+                    "table": "video_snapshots",
+                    "filters": {"date_from": start, "date_to": end},
                 },
             )
 

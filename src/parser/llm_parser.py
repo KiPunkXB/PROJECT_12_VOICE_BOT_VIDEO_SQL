@@ -35,10 +35,75 @@ UNKNOWN format:
 Rules:
 1) No SQL text, JSON only.
 2) If unsure -> UNKNOWN.
-3) If query asks date range of all videos -> VIDEO_DATE_RANGE.
+3) If query asks ONLY the date range (period) of all videos in DB -> VIDEO_DATE_RANGE. "Список/динамика/покажи/расскажи" → UNKNOWN.
 4) growth/increase/new views -> metric delta_* in video_snapshots.
 5) if month mentioned without year, use 2025.
 6) UUID with dashes => video_id; 32-char hex => creator_id.
+7) "Кто/какой автор/создатель/топ автор/самый популярный автор" → LOOKUP_ID id_field=creator_id. "Какое видео/топ видео по X/самое X видео" → LOOKUP_ID id_field=id.
+8) "Сколько видео создал/выпустил/опубликовал автор X" → AGGREGATE COUNT(*), NOT LOOKUP_ID.
+9) EXACT field names only: views_count, likes_count, comments_count, reports_count, delta_views_count, delta_likes_count, delta_comments_count, delta_reports_count. Never use shortened names (NOT "likes", NOT "delta_views").
+10) "без X" (no X / without X) → filter_eq_field=X_count, filter_eq_value=0.
+11) "с X / с жалобами / с лайками" (has at least some X) → filter_field=X_count, filter_gt=0.
+12) "сколько просмотров/лайков/комментариев/жалоб" (total metric, not video count) → AGGREGATE SUM(X_count) from videos.
+13) "максимальное/минимальное количество X у одного видео" → AGGREGATE MAX/MIN(X_count), NOT LOOKUP_ID.
+
+Examples:
+"какой создатель выпустил больше всего видео"
+{"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"COUNT","metric":"*","table":"videos","filters":{}}
+
+"кто самый популярный автор по просмотрам"
+{"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"SUM","metric":"views_count","table":"videos","filters":{}}
+
+"топ видео по лайкам"
+{"intent_type":"LOOKUP_ID","id_field":"id","metric":"likes_count","table":"videos","filters":{}}
+
+"какое видео самое просматриваемое"
+{"intent_type":"LOOKUP_ID","id_field":"id","metric":"views_count","table":"videos","filters":{}}
+
+"сколько видео создал автор abc123"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"creator_id":"abc123"}}
+
+"сколько видео без просмотров"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"filter_eq_field":"views_count","filter_eq_value":0}}
+
+"сколько видео без лайков"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"filter_eq_field":"likes_count","filter_eq_value":0}}
+
+"сколько видео с жалобами"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"filter_field":"reports_count","filter_gt":0}}
+
+"сколько видео с лайками больше 50000 за ноябрь"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"filter_field":"likes_count","filter_gt":50000,"date_from":"2025-11-01","date_to":"2025-11-30"}}
+
+"сколько комментариев за октябрь"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"comments_count","table":"videos","filters":{"date_from":"2025-10-01","date_to":"2025-10-31"}}
+
+"сколько жалоб за весь период"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"reports_count","table":"videos","filters":{}}
+
+"максимальное количество просмотров у одного видео"
+{"intent_type":"AGGREGATE","operation":"MAX","metric":"views_count","table":"videos","filters":{}}
+
+"сколько видео получили новые просмотры 27 ноября"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"video_id","table":"video_snapshots","filters":{"date_from":"2025-11-27","date_to":"2025-11-27","filter_field":"delta_views_count","filter_gt":0}}
+
+"сколько уникальных видео хотя бы раз показали отрицательный прирост просмотров"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"video_id","table":"video_snapshots","filters":{"filter_lt_field":"delta_views_count","filter_lt_value":0}}
+
+"сколько замеров где просмотры меньше 1000"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"filter_lt_field":"views_count","filter_lt_value":1000}}
+
+"прирост просмотров 28 ноября 2025"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_views_count","table":"video_snapshots","filters":{"date_from":"2025-11-28","date_to":"2025-11-28"}}
+
+"сколько лайков у видео ecd8a4e4-1f24"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{"video_id":"ecd8a4e4-1f24"}}
+
+"покажи список всех видео"
+{"intent_type":"UNKNOWN"}
+
+"динамика просмотров по дням за ноябрь"
+{"intent_type":"UNKNOWN"}
 """
 
 
@@ -191,6 +256,18 @@ Query: "максимальные лайки за ноябрь"
 
 Query: "минимальные жалобы"
 {"intent_type":"AGGREGATE","operation":"MIN","metric":"reports_count","table":"videos","filters":{}}
+
+Query: "максимальное количество просмотров у одного видео"
+{"intent_type":"AGGREGATE","operation":"MAX","metric":"views_count","table":"videos","filters":{}}
+
+Query: "сколько комментариев за октябрь"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"comments_count","table":"videos","filters":{"date_from":"2025-10-01","date_to":"2025-10-31"}}
+
+Query: "сколько жалоб за весь период"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"reports_count","table":"videos","filters":{}}
+
+Query: "сколько видео с лайками больше 50000 за ноябрь"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"filter_field":"likes_count","filter_gt":50000,"date_from":"2025-11-01","date_to":"2025-11-30"}}
 
 Query: "прирост просмотров 28 ноября 2025"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_views_count","table":"video_snapshots","filters":{"date_from":"2025-11-28","date_to":"2025-11-28"}}

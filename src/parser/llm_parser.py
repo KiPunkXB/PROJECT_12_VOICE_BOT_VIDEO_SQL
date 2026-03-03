@@ -53,7 +53,7 @@ SYSTEM_PROMPT = """Ты NLU-парсер запросов к аналитике 
 ━━━━━━━━━━━━━━━━━ ФОРМАТЫ ОТВЕТА ━━━━━━━━━━━━━━━━━━━━━
 
 AGGREGATE:
-{"intent_type":"AGGREGATE","operation":"COUNT|SUM|AVG|MAX|MIN|COUNT_DISTINCT","metric":"<поле> или *","table":"videos|video_snapshots","filters":{"creator_id":null,"video_id":null,"date_from":"YYYY-MM-DD|null","date_to":"YYYY-MM-DD|null","filter_field":null,"filter_gt":null,"filter_eq_field":null,"filter_eq_value":null}}
+{"intent_type":"AGGREGATE","operation":"COUNT|SUM|AVG|MAX|MIN|COUNT_DISTINCT","metric":"<поле> или *","table":"videos|video_snapshots","filters":{"creator_id":null,"video_id":null,"date_from":"YYYY-MM-DD|null","date_to":"YYYY-MM-DD|null","filter_field":null,"filter_gt":null,"filter_lt_field":null,"filter_lt_value":null,"filter_eq_field":null,"filter_eq_value":null}}
 
 LOOKUP_ID (возвращает creator_id самого активного автора):
 {"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"SUM|COUNT","metric":"<поле> или *","table":"videos","filters":{}}
@@ -78,6 +78,7 @@ UNKNOWN:
 7) date_from и date_to — ВКЛЮЧИТЕЛЬНО; код добавит +1 день для <.
 8) Если год не указан → используй 2025.
 9) filter_field + filter_gt для "больше N", "превысили N", "свыше N".
+9b) filter_lt_field + filter_lt_value для "меньше N", "ниже N", "отрицательный" (< 0), "стало меньше".
 10) filter_eq_field + filter_eq_value для "ровно 0", "без просмотров", "без лайков".
 11) UNKNOWN если запрос не о видео-аналитике.
 12) Не выдумывай creator_id если он явно не указан в запросе.
@@ -223,6 +224,21 @@ UNKNOWN:
 Запрос: "есть видео без просмотров в мае"
 {"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"filter_eq_field":"views_count","filter_eq_value":0,"date_from":"2025-05-01","date_to":"2025-05-31"}}
 
+Запрос: "сколько замеров где прирост просмотров отрицательный"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"filter_lt_field":"delta_views_count","filter_lt_value":0}}
+
+Запрос: "сколько замеров где число просмотров за час стало меньше"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"filter_lt_field":"delta_views_count","filter_lt_value":0}}
+
+Запрос: "сколько раз прирост лайков был отрицательным"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"filter_lt_field":"delta_likes_count","filter_lt_value":0}}
+
+Запрос: "сколько замеров с просмотрами меньше 1000"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"filter_lt_field":"views_count","filter_lt_value":1000}}
+
+Запрос: "сколько видео с лайками меньше 100"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"filter_lt_field":"likes_count","filter_lt_value":100}}
+
 Запрос: "в каком месяце больше всего видео"
 {"intent_type":"UNKNOWN"}
 
@@ -309,6 +325,16 @@ def _parse_filters(raw: dict) -> dict | None:
     if filter_eq_value is not None:
         try:
             filters["filter_eq_value"] = int(filter_eq_value)
+        except (TypeError, ValueError):
+            return None
+
+    filter_lt_field = raw.get("filter_lt_field")
+    filter_lt_value = raw.get("filter_lt_value")
+    if filter_lt_field is not None:
+        filters["filter_lt_field"] = str(filter_lt_field)
+    if filter_lt_value is not None:
+        try:
+            filters["filter_lt_value"] = int(filter_lt_value)
         except (TypeError, ValueError):
             return None
 

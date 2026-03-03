@@ -126,6 +126,16 @@ def _build_where(
         values.append(int(filter_eq_value))
         i += 1
 
+    # filter_lt — WHERE field < value (например, delta_views_count < 0)
+    filter_lt_field = filters.get("filter_lt_field")
+    filter_lt_value = filters.get("filter_lt_value")
+    if filter_lt_field is not None and filter_lt_value is not None:
+        if filter_lt_field not in ALLOWED_FILTER_FIELDS.get(table, set()):
+            raise ValueError(f"Unknown filter_lt_field: {filter_lt_field!r}")
+        conditions.append(f"{filter_lt_field} < ${i}")
+        values.append(int(filter_lt_value))
+        i += 1
+
     where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
     return where, values, i
 

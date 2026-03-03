@@ -90,6 +90,7 @@ UNKNOWN:
 19) "У какого автора есть видео без X" → LOOKUP_ID creator_id + filter_eq_field+filter_eq_value=0.
 20) "В каком месяце/дне/году..." → UNKNOWN (бот не отвечает датой/месяцем).
 21) "Есть ли видео без X" → AGGREGATE COUNT с filter_eq_value=0.
+22) "Система/платформа/база/сервис" = все видео в таблице videos, без фильтров.
 
 ━━━━━━━━━━━━━━━━━ ПРИМЕРЫ ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -125,6 +126,18 @@ UNKNOWN:
 
 Запрос: "суммарные просмотры всех видео"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{}}
+
+Запрос: "сколько просмотров набрала система"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{}}
+
+Запрос: "сколько лайков в системе"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{}}
+
+Запрос: "сколько просмотров на платформе"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{}}
+
+Запрос: "сколько жалоб в системе за ноябрь"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"reports_count","table":"videos","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
 
 Запрос: "сколько лайков всего"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{}}

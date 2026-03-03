@@ -20,14 +20,6 @@ MONTHS_RU = {
     "декабря": 12,
 }
 
-# Ключевые слова для определения метрики в TOP_N из rule parser
-_METRIC_KEYWORDS: dict[str, str] = {
-    "лайк": "likes_count",
-    "коммент": "comments_count",
-    "жалоб": "reports_count",
-    "просмотр": "views_count",
-}
-
 
 def normalize_text(text: str) -> str:
     normalized = " ".join(text.strip().lower().split())
@@ -98,23 +90,6 @@ def parse_intent(text: str) -> Intent:
         )
     ):
         return Intent(intent_type=IntentType.VIDEO_DATE_RANGE, params={})
-
-    # Rule 2: TOP_N — "топ N видео/по лайкам/..."
-    if ("топ" in normalized or "top" in normalized) and "видео" in normalized:
-        limit_match = re.search(r"(?:топ|top)\s+(\d+)", normalized)
-        limit = int(limit_match.group(1)) if limit_match else 10
-
-        # Определяем метрику из контекста
-        metric = "views_count"
-        for kw, field in _METRIC_KEYWORDS.items():
-            if kw in normalized:
-                metric = field
-                break
-
-        return Intent(
-            intent_type=IntentType.TOP_N,
-            params={"metric": metric, "table": "videos", "limit": min(limit, 50), "filters": {}},
-        )
 
     # Всё остальное → LLM
     return Intent(intent_type=IntentType.UNKNOWN, params={})

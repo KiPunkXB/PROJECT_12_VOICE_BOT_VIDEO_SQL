@@ -8,13 +8,7 @@ from aiogram.types import Message
 logger = logging.getLogger(__name__)
 
 from src.core.config import Settings
-from src.bot.formatting import (
-    format_numeric_response,
-    format_top_n,
-    format_top_creators,
-    format_time_series,
-    format_video_detail,
-)
+from src.bot.formatting import format_numeric_response
 from src.parser.hybrid_parser import parse_intent_hybrid
 from src.sql.engine import execute_intent
 
@@ -25,12 +19,12 @@ START_MESSAGE = (
     "• считаю любые метрики: просмотры, лайки, комментарии, жалобы;\n"
     "• фильтрую по дате, создателю, конкретному видео;\n"
     "• понимаю запросы на русском (в том числе с опечатками);\n"
-    "• показываю топ видео по любому показателю.\n\n"
+    "• нахожу автора или видео с максимальной метрикой.\n\n"
     "🧪 Примеры запросов:\n"
     "1) Сколько всего видео в системе?\n"
     "2) Сколько лайков у видео 42?\n"
     "3) Прирост просмотров 28 ноября 2025\n"
-    "4) Топ 10 видео по лайкам\n"
+    "4) Какой автор получил больше всего лайков?\n"
     "5) Сколько видео у создателя abc за ноябрь?\n"
     "6) Средние просмотры на видео\n\n"
     "ℹ️ Введи /help, если нужен мини-гайд."
@@ -40,13 +34,13 @@ HELP_MESSAGE = (
     "📌 Мини-гайд\n\n"
     "• Отправь текстовый запрос на русском.\n"
     "• Поддерживаемые метрики: просмотры, лайки, комментарии, жалобы.\n"
-    "• Поддерживаемые операции: сколько, сумма, среднее, максимум, топ N.\n"
+    "• Поддерживаемые операции: сколько, сумма, среднее, максимум, минимум.\n"
     "• Фильтры: по дате, по создателю, по ID видео, по порогу.\n"
     "• Поддерживаются даты вида: `28 ноября 2025`, `с 1 по 5 ноября 2025`.\n\n"
     "💡 Примеры:\n"
     "• `Сколько видео в августе?`\n"
     "• `Сумма лайков за ноябрь 2025`\n"
-    "• `Топ 5 по комментариям`\n"
+    "• `Какой автор выпустил больше всего видео?`\n"
     "• `Видео с просмотрами больше 100000`"
 )
 
@@ -77,19 +71,7 @@ def build_router(pool, settings: Settings) -> Router:
             await message.answer("⚠️ Не удалось выполнить запрос. Попробуй переформулировать.")
             return
 
-        if isinstance(value, dict):
-            await message.answer(format_video_detail(value))
-        elif isinstance(value, list) and value:
-            rtype = value[0].get("_type", "top_n")
-            if rtype == "top_creators":
-                await message.answer(format_top_creators(value))
-            elif rtype == "time_series":
-                await message.answer(format_time_series(value))
-            else:
-                await message.answer(format_top_n(value))
-        elif isinstance(value, list):
-            await message.answer("Нет данных")
-        elif isinstance(value, (int, float)):
+        if isinstance(value, (int, float)):
             await message.answer(format_numeric_response(value))
         else:
             await message.answer(str(value))

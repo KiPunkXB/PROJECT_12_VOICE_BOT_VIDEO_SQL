@@ -25,6 +25,8 @@ ALLOWED_METRICS: dict[str, set[str]] = {
         "delta_likes_count",
         "delta_comments_count",
         "delta_reports_count",
+        # virtual: используется для AVG(COUNT(*) GROUP BY video_id)
+        "snapshot_count",
     },
 }
 
@@ -234,6 +236,14 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
         filters: dict = params.get("filters", {})
 
         _validate(table, operation, metric)
+
+        # Специальный случай: AVG(snapshot_count) = среднее число замеров на видео
+        # SQL: SELECT AVG(cnt)::bigint FROM (SELECT COUNT(*) AS cnt FROM video_snapshots [WHERE] GROUP BY video_id) AS _sub
+        if operation == "AVG" and metric == "snapshot_count":
+            where_inner, values, _ = _build_where(table, filters)
+            inner = f"SELECT COUNT(*) AS _cnt FROM {table}{where_inner} GROUP BY video_id"
+            query = f"SELECT AVG(_cnt)::bigint FROM ({inner}) AS _sub;"
+            return query, tuple(values)
 
         # Если запрос к video_snapshots + фильтр по creator_id → нужен JOIN с videos
         needs_join = table == "video_snapshots" and "creator_id" in filters

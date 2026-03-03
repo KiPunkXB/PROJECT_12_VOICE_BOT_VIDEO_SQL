@@ -94,6 +94,7 @@ UNKNOWN:
 21) "Есть ли видео без X" → AGGREGATE COUNT с filter_eq_value=0.
 22) "Система/платформа/база/сервис" = все видео в таблице videos, без фильтров.
 23) hour_from и hour_to — целые числа 0–23, фильтр по часу замера в video_snapshots ("с 10:00 до 15:00" → hour_from=10, hour_to=15). Обязательно оба поля вместе.
+24) "Среднее количество замеров на видео" → AGGREGATE, operation=AVG, metric=snapshot_count, table=video_snapshots. Никогда не используй metric="*" с operation=AVG.
 
 ━━━━━━━━━━━━━━━━━ ПРИМЕРЫ ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -292,6 +293,15 @@ UNKNOWN:
 Запрос: "сколько замеров у создателя abc за 28 ноября"
 {"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"creator_id":"abc","date_from":"2025-11-28","date_to":"2025-11-28"}}
 
+Запрос: "среднее количество замеров на видео"
+{"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{}}
+
+Запрос: "сколько в среднем замеров приходится на одно видео"
+{"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{}}
+
+Запрос: "среднее число замеров за ноябрь на видео"
+{"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
+
 Запрос: "погода в москве"
 {"intent_type":"UNKNOWN"}
 
@@ -409,6 +419,9 @@ def _payload_to_intent(payload: dict[str, Any]) -> Intent:
         if table not in ALLOWED_METRICS:
             return _UNKNOWN_INTENT
         if metric not in ALLOWED_METRICS[table]:
+            return _UNKNOWN_INTENT
+        # AVG(*) — невалидный SQL; для среднего числа замеров на видео нужен metric=snapshot_count
+        if operation == "AVG" and metric == "*":
             return _UNKNOWN_INTENT
 
         filters = _parse_filters(raw_filters)

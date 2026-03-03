@@ -22,6 +22,7 @@ def test_no_select_star_in_templates() -> None:
             IntentType.COUNT_DISTINCT_VIDEOS_WITH_NEW_VIEWS_DAY,
             {"start": datetime(2025, 11, 28), "end": datetime(2025, 11, 29)},
         ),
+        Intent(IntentType.VIDEO_DATE_RANGE, {}),
     ]
     for intent in intents:
         query, _ = build_query(intent)
@@ -35,4 +36,3 @@ def test_unknown_intent_unsupported() -> None:
         raise AssertionError("Unknown intent should not build query")
     except ValueError:
         pass
-

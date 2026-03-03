@@ -55,5 +55,15 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
             (params["start"], params["end"]),
         )
 
-    raise ValueError(f"Unsupported intent type: {intent_type}")
+    if intent_type == IntentType.VIDEO_DATE_RANGE:
+        return (
+            """
+            SELECT
+              MIN(video_created_at)::date AS min_date,
+              MAX(video_created_at)::date AS max_date
+            FROM videos;
+            """,
+            (),
+        )
 
+    raise ValueError(f"Unsupported intent type: {intent_type}")

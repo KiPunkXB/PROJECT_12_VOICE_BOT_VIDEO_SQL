@@ -4,8 +4,9 @@ from aiogram import Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
+from src.core.config import Settings
 from src.bot.formatting import format_numeric_response
-from src.parser.rule_parser import parse_intent
+from src.parser.hybrid_parser import parse_intent_hybrid
 from src.sql.engine import execute_intent
 
 
@@ -33,7 +34,7 @@ HELP_MESSAGE = (
 )
 
 
-def build_router(pool, sql_timeout_seconds: float) -> Router:
+def build_router(pool, settings: Settings) -> Router:
     router = Router()
 
     @router.message(CommandStart())
@@ -47,13 +48,15 @@ def build_router(pool, sql_timeout_seconds: float) -> Router:
     @router.message()
     async def query_handler(message: Message) -> None:
         text = message.text or ""
-        intent = parse_intent(text)
+        intent = await parse_intent_hybrid(text, settings)
         value = await execute_intent(
             pool=pool,
             intent=intent,
-            sql_timeout_seconds=sql_timeout_seconds,
+            sql_timeout_seconds=settings.sql_timeout_seconds,
         )
-        # Strict checker format: numeric string only.
-        await message.answer(format_numeric_response(value))
+        if isinstance(value, (int, float)):
+            await message.answer(format_numeric_response(value))
+        else:
+            await message.answer(str(value))
 
     return router

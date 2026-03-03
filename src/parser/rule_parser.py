@@ -22,7 +22,10 @@ MONTHS_RU = {
 
 
 def normalize_text(text: str) -> str:
-    return " ".join(text.strip().lower().split())
+    normalized = " ".join(text.strip().lower().split())
+    normalized = re.sub(r"видос\w*", "видео", normalized)
+    normalized = re.sub(r"ролик\w*", "видео", normalized)
+    return normalized
 
 
 def normalize_number(raw: str) -> int:
@@ -100,6 +103,15 @@ def extract_creator_id(text: str) -> str | None:
 def parse_intent(text: str) -> Intent:
     normalized = normalize_text(text)
 
+    # Rule 0: VIDEO_DATE_RANGE
+    if "видео" in normalized and (
+        "диапазон дат" in normalized
+        or "с какой даты" in normalized
+        or "по какую" in normalized
+        or "период видео" in normalized
+    ):
+        return Intent(intent_type=IntentType.VIDEO_DATE_RANGE, params={})
+
     # Rule 1: COUNT_VIDEOS_CREATOR_DATE_RANGE
     if "креатор" in normalized and "видео" in normalized:
         creator_id = extract_creator_id(normalized)
@@ -149,7 +161,7 @@ def parse_intent(text: str) -> Intent:
     # Rule 5: COUNT_VIDEOS_ALL
     if (
         "сколько" in normalized
-        and ("видео" in normalized or "ролик" in normalized or "роликов" in normalized)
+        and "видео" in normalized
         and (
             "всего" in normalized
             or "всех" in normalized

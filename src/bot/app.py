@@ -20,7 +20,7 @@ async def main() -> None:
     pool = await create_pool(settings.database_url)
     bot = Bot(token=settings.telegram_bot_token)
     dispatcher = Dispatcher()
-    dispatcher.include_router(build_router(pool, settings.sql_timeout_seconds))
+    dispatcher.include_router(build_router(pool, settings))
 
     try:
         await dispatcher.start_polling(bot)

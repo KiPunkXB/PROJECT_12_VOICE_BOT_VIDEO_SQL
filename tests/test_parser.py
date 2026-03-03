@@ -51,3 +51,27 @@ def test_distinct_with_new_views_day_intent() -> None:
     text = "Сколько разных видео получали новые просмотры 27 ноября 2025?"
     intent = parse_intent(text)
     assert intent.intent_type == IntentType.COUNT_DISTINCT_VIDEOS_WITH_NEW_VIEWS_DAY
+
+
+def test_synonym_vidosy_is_supported() -> None:
+    text = "Сколько видосов набрало больше 100к просмотров за всё время?"
+    intent = parse_intent(text)
+    assert intent.intent_type == IntentType.COUNT_VIDEOS_VIEWS_GT
+
+
+def test_video_date_range_intent() -> None:
+    text = "Покажи диапазон дат видео в базе"
+    intent = parse_intent(text)
+    assert intent.intent_type == IntentType.VIDEO_DATE_RANGE
+
+
+def test_video_date_range_alt_phrasing() -> None:
+    text = "С какой даты по какую есть видео в базе?"
+    intent = parse_intent(text)
+    assert intent.intent_type == IntentType.VIDEO_DATE_RANGE
+
+
+def test_video_date_range_with_typo_goes_to_unknown() -> None:
+    text = "диапозон дат видео в базе"
+    intent = parse_intent(text)
+    assert intent.intent_type == IntentType.UNKNOWN

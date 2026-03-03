@@ -29,11 +29,22 @@ copy .env.example .env
 - One request -> one numeric answer.
 - No dialogue context storage.
 - Deterministic parser in MVP (no LLM required).
+- Hybrid parser available: rule-based first, GPT fallback for free-form phrasing.
 
 ## Bot UX
 - `/start` -> friendly intro with examples.
 - `/help` -> short usage guide.
-- Any regular text query -> numeric result only.
+- Metric queries -> numeric result.
+- Date-range meta query (e.g. "покажи диапазон дат видео") -> text range.
+
+## LLM fallback parser
+- Enable with:
+  - `LLM_PARSER_ENABLED=1`
+  - `OPENAI_API_KEY=...`
+  - `OPENAI_MODEL=gpt-4o-mini`
+- Flow:
+  - rule parser tries first (fast and deterministic)
+  - if unknown -> GPT maps text to strict intent JSON
 
 ## Checker-like local smoke
 ```bash

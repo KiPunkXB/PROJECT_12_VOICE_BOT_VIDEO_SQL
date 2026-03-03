@@ -120,6 +120,16 @@ def _build_where(
         values.append(int(delta_gt))
         i += 1
 
+    # filter_eq — WHERE field = value (например, views_count = 0)
+    filter_eq_field = filters.get("filter_eq_field")
+    filter_eq_value = filters.get("filter_eq_value")
+    if filter_eq_field is not None and filter_eq_value is not None:
+        if filter_eq_field not in ALLOWED_FILTER_FIELDS.get(table, set()):
+            raise ValueError(f"Unknown filter_eq_field: {filter_eq_field!r}")
+        conditions.append(f"{filter_eq_field} = ${i}")
+        values.append(int(filter_eq_value))
+        i += 1
+
     where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
     return where, values, i
 
@@ -166,6 +176,57 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
         # В videos первичный ключ — "id", делаем алиас video_id для единообразия
         id_select = "id AS video_id" if table == "videos" else "video_id"
         query = f"SELECT {id_select}, {metric} FROM {table}{where} ORDER BY {metric} DESC LIMIT ${i};"
+        return query, tuple(values)
+
+    if itype == IntentType.VIDEO_DETAIL:
+        video_id = params["video_id"]
+        return (
+            "SELECT id, creator_id, video_created_at, views_count, likes_count, comments_count, reports_count "
+            "FROM videos WHERE id = $1;",
+            (str(video_id),),
+        )
+
+    if itype == IntentType.TOP_CREATORS:
+        metric: str = params["metric"]  # "count" или имя поля
+        limit: int = int(params["limit"])
+        filters: dict = params.get("filters", {})
+
+        where, values, i = _build_where("videos", filters)
+        values.append(limit)
+
+        if metric == "count":
+            select = "SELECT creator_id, COUNT(*) AS value"
+        else:
+            if metric not in ALLOWED_METRICS["videos"] - {"*", "id", "creator_id"}:
+                raise ValueError(f"Unknown metric {metric!r} for TOP_CREATORS")
+            select = f"SELECT creator_id, SUM({metric}) AS value"
+
+        query = f"{select} FROM videos{where} GROUP BY creator_id ORDER BY value DESC LIMIT ${i};"
+        return query, tuple(values)
+
+    if itype == IntentType.TIME_SERIES:
+        metric: str = params["metric"]   # delta_* поле
+        filters: dict = params.get("filters", {})
+        limit: int = int(params.get("limit", 0))  # 0 = все дни, >0 = топ N дней
+
+        if metric not in ALLOWED_METRICS["video_snapshots"] - {"*", "video_id"}:
+            raise ValueError(f"Unknown metric {metric!r} for TIME_SERIES")
+
+        where, values, i = _build_where("video_snapshots", filters)
+
+        if limit > 0:
+            values.append(limit)
+            query = (
+                f"SELECT created_at::date AS day, SUM({metric}) AS value "
+                f"FROM video_snapshots{where} "
+                f"GROUP BY day ORDER BY value DESC LIMIT ${i};"
+            )
+        else:
+            query = (
+                f"SELECT created_at::date AS day, SUM({metric}) AS value "
+                f"FROM video_snapshots{where} "
+                f"GROUP BY day ORDER BY day ASC;"
+            )
         return query, tuple(values)
 
     if itype == IntentType.VIDEO_DATE_RANGE:

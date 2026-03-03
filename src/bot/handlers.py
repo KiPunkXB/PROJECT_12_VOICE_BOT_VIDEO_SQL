@@ -8,7 +8,13 @@ from aiogram.types import Message
 logger = logging.getLogger(__name__)
 
 from src.core.config import Settings
-from src.bot.formatting import format_numeric_response, format_top_n
+from src.bot.formatting import (
+    format_numeric_response,
+    format_top_n,
+    format_top_creators,
+    format_time_series,
+    format_video_detail,
+)
 from src.parser.hybrid_parser import parse_intent_hybrid
 from src.sql.engine import execute_intent
 
@@ -71,8 +77,18 @@ def build_router(pool, settings: Settings) -> Router:
             await message.answer("⚠️ Не удалось выполнить запрос. Попробуй переформулировать.")
             return
 
-        if isinstance(value, list):
-            await message.answer(format_top_n(value))
+        if isinstance(value, dict):
+            await message.answer(format_video_detail(value))
+        elif isinstance(value, list) and value:
+            rtype = value[0].get("_type", "top_n")
+            if rtype == "top_creators":
+                await message.answer(format_top_creators(value))
+            elif rtype == "time_series":
+                await message.answer(format_time_series(value))
+            else:
+                await message.answer(format_top_n(value))
+        elif isinstance(value, list):
+            await message.answer("Нет данных")
         elif isinstance(value, (int, float)):
             await message.answer(format_numeric_response(value))
         else:

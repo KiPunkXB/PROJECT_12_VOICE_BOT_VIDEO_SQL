@@ -8,6 +8,9 @@ from typing import Any
 class IntentType(str, Enum):
     AGGREGATE = "AGGREGATE"
     TOP_N = "TOP_N"
+    TOP_CREATORS = "TOP_CREATORS"
+    TIME_SERIES = "TIME_SERIES"
+    VIDEO_DETAIL = "VIDEO_DETAIL"
     VIDEO_DATE_RANGE = "VIDEO_DATE_RANGE"
     UNKNOWN = "UNKNOWN"
 

@@ -25,6 +25,9 @@ def normalize_text(text: str) -> str:
     normalized = " ".join(text.strip().lower().split())
     normalized = re.sub(r"видос\w*", "видео", normalized)
     normalized = re.sub(r"ролик\w*", "видео", normalized)
+    normalized = re.sub(r"\bвидио\b", "видео", normalized)
+    normalized = re.sub(r"\bвдио\b", "видео", normalized)
+    normalized = re.sub(r"\bдиапозон\b", "диапазон", normalized)
     return normalized
 
 
@@ -104,11 +107,19 @@ def parse_intent(text: str) -> Intent:
     normalized = normalize_text(text)
 
     # Rule 0: VIDEO_DATE_RANGE
-    if "видео" in normalized and (
+    if (
         "диапазон дат" in normalized
-        or "с какой даты" in normalized
-        or "по какую" in normalized
-        or "период видео" in normalized
+        or (
+            "видео" in normalized
+            and (
+                "с какой даты" in normalized
+                or "по какую" in normalized
+                or "период видео" in normalized
+                or "в какие дни" in normalized
+                or "в какие даты" in normalized
+                or "какие дни видео" in normalized
+            )
+        )
     ):
         return Intent(intent_type=IntentType.VIDEO_DATE_RANGE, params={})
 
@@ -148,7 +159,17 @@ def parse_intent(text: str) -> Intent:
                 params={"start": start, "end": end},
             )
 
-    # Rule 4: COUNT_DISTINCT_VIDEOS_WITH_NEW_VIEWS_DAY
+    # Rule 4: SUM_VIEWS_ALL
+    if "просмотр" in normalized and (
+        "сколько всего просмотров" in normalized
+        or "сколько просмотров всего" in normalized
+        or "всего просмотров" in normalized
+        or "общее количество просмотров" in normalized
+        or "сумма просмотров" in normalized
+    ):
+        return Intent(intent_type=IntentType.SUM_VIEWS_ALL, params={})
+
+    # Rule 5: COUNT_DISTINCT_VIDEOS_WITH_NEW_VIEWS_DAY
     if "разных видео" in normalized and "новые просмотры" in normalized:
         date_range = parse_single_date(normalized)
         if date_range is not None:
@@ -158,7 +179,7 @@ def parse_intent(text: str) -> Intent:
                 params={"start": start, "end": end},
             )
 
-    # Rule 5: COUNT_VIDEOS_ALL
+    # Rule 6: COUNT_VIDEOS_ALL
     if (
         "сколько" in normalized
         and "видео" in normalized

@@ -15,6 +15,7 @@ SYSTEM_PROMPT = """Ты NLU-парсер запросов к аналитике 
 
 Разрешенные intent_type:
 - COUNT_VIDEOS_ALL
+- SUM_VIEWS_ALL
 - COUNT_VIDEOS_CREATOR_DATE_RANGE
 - COUNT_VIDEOS_VIEWS_GT
 - SUM_DELTA_VIEWS_DAY
@@ -45,6 +46,9 @@ def _payload_to_intent(payload: dict[str, Any]) -> Intent:
         return Intent(IntentType.UNKNOWN, {})
 
     if intent_type == IntentType.COUNT_VIDEOS_ALL:
+        return Intent(intent_type, {})
+
+    if intent_type == IntentType.SUM_VIEWS_ALL:
         return Intent(intent_type, {})
 
     if intent_type == IntentType.COUNT_VIDEOS_VIEWS_GT:
@@ -114,4 +118,3 @@ async def parse_intent_with_llm(text: str, settings: Settings) -> Intent:
     if not isinstance(payload, dict):
         return Intent(IntentType.UNKNOWN, {})
     return _payload_to_intent(payload)
-

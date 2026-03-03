@@ -71,7 +71,37 @@ def test_video_date_range_alt_phrasing() -> None:
     assert intent.intent_type == IntentType.VIDEO_DATE_RANGE
 
 
-def test_video_date_range_with_typo_goes_to_unknown() -> None:
+def test_video_date_range_with_typo_is_supported() -> None:
     text = "диапозон дат видео в базе"
     intent = parse_intent(text)
-    assert intent.intent_type == IntentType.UNKNOWN
+    assert intent.intent_type == IntentType.VIDEO_DATE_RANGE
+
+
+def test_video_date_range_with_days_phrasing_is_supported() -> None:
+    text = "в какие дни видео"
+    intent = parse_intent(text)
+    assert intent.intent_type == IntentType.VIDEO_DATE_RANGE
+
+
+def test_video_date_range_without_video_word_is_supported() -> None:
+    text = "какой диапазон дат"
+    intent = parse_intent(text)
+    assert intent.intent_type == IntentType.VIDEO_DATE_RANGE
+
+
+def test_sum_views_all_intent() -> None:
+    text = "сколько всего просмотров"
+    intent = parse_intent(text)
+    assert intent.intent_type == IntentType.SUM_VIEWS_ALL
+
+
+def test_typo_vidio_is_supported() -> None:
+    text = "Сколько видио набрало больше 100к просмотров за всё время?"
+    intent = parse_intent(text)
+    assert intent.intent_type == IntentType.COUNT_VIDEOS_VIEWS_GT
+
+
+def test_typo_vdio_is_supported() -> None:
+    text = "Сколько вдио набрало больше 100к просмотров за всё время?"
+    intent = parse_intent(text)
+    assert intent.intent_type == IntentType.COUNT_VIDEOS_VIEWS_GT

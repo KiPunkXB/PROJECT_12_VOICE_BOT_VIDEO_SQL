@@ -10,6 +10,9 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
     if intent_type == IntentType.COUNT_VIDEOS_ALL:
         return "SELECT COUNT(*)::bigint FROM videos;", ()
 
+    if intent_type == IntentType.SUM_VIEWS_ALL:
+        return "SELECT COALESCE(SUM(views_count), 0)::bigint FROM videos;", ()
+
     if intent_type == IntentType.COUNT_VIDEOS_CREATOR_DATE_RANGE:
         return (
             """

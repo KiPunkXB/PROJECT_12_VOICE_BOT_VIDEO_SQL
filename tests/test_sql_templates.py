@@ -9,6 +9,7 @@ from src.sql.queries import build_query
 def test_no_select_star_in_templates() -> None:
     intents = [
         Intent(IntentType.COUNT_VIDEOS_ALL, {}),
+        Intent(IntentType.SUM_VIEWS_ALL, {}),
         Intent(
             IntentType.COUNT_VIDEOS_CREATOR_DATE_RANGE,
             {"creator_id": 1, "start": datetime(2025, 11, 1), "end": datetime(2025, 11, 6)},

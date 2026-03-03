@@ -1,0 +1,36 @@
+﻿# Secret files
+.env
+.env.*
+
+# Source instruction folders (must not be tracked)
+comand/
+obrazec/
+
+# Working control docs (must not be tracked)
+rules/
+plan/
+specs/
+docs/
+scripts/
+
+# Explicit file name bans
+**/RULS_CURRENT.md
+**/PROJECT_PLAN_DETAILED.md
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local docker bind data for this project
+PROJECT_12_VOICE_BOT_VIDEO_SQL/
+Тестовое задание python _ 3-4hours.pdf

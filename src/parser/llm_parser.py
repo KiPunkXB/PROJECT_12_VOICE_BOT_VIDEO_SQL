@@ -82,7 +82,10 @@ UNKNOWN:
 10) filter_eq_field + filter_eq_value для "ровно 0", "без просмотров", "без лайков".
 11) UNKNOWN если запрос не о видео-аналитике.
 12) Не выдумывай creator_id если он явно не указан в запросе.
-12b) Глаголы "набрал/получил/заработал/собрал" + метрика + ID → creator_id (человек накапливает метрику). Никогда не используй video_id для таких запросов.
+12b) Определяй тип ID по формату:
+     - UUID с дефисами (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx) → video_id (видео)
+     - Hex без дефисов (32 символа, напр. df5973c0...) → creator_id (автор/создатель)
+     Это правило приоритетнее контекста запроса.
 13) Если нужны delta_* метрики по конкретному автору — используй table=video_snapshots и creator_id в filters (JOIN добавится автоматически).
 13b) Для итоговых метрик (views_count, likes_count и пр.) по автору — table=videos.
 14) "Топ видео по X" → LOOKUP_ID с id_field="id" и метрикой X.
@@ -195,6 +198,15 @@ UNKNOWN:
 
 Запрос: "сколько лайков набрал df5973c05d90471ca1a7511e2560cfbf"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{"creator_id":"df5973c05d90471ca1a7511e2560cfbf"}}
+
+Запрос: "сколько лайков набрал fde42b07-37f4-4db7-95b4-d850a5e78693"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{"video_id":"fde42b07-37f4-4db7-95b4-d850a5e78693"}}
+
+Запрос: "сколько просмотров набрал fde42b07-37f4-4db7-95b4-d850a5e78693"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{"video_id":"fde42b07-37f4-4db7-95b4-d850a5e78693"}}
+
+Запрос: "сколько лайков у abc1-2345-6789-abcd-000000000000"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{"video_id":"abc1-2345-6789-abcd-000000000000"}}
 
 Запрос: "сколько просмотров набрал abc123"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{"creator_id":"abc123"}}

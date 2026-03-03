@@ -82,6 +82,7 @@ UNKNOWN:
 10) filter_eq_field + filter_eq_value для "ровно 0", "без просмотров", "без лайков".
 11) UNKNOWN если запрос не о видео-аналитике.
 12) Не выдумывай creator_id если он явно не указан в запросе.
+12b) Глаголы "набрал/получил/заработал/собрал" + метрика + ID → creator_id (человек накапливает метрику). Никогда не используй video_id для таких запросов.
 13) Если нужны delta_* метрики по конкретному автору — используй table=video_snapshots и creator_id в filters (JOIN добавится автоматически).
 13b) Для итоговых метрик (views_count, likes_count и пр.) по автору — table=videos.
 14) "Топ видео по X" → LOOKUP_ID с id_field="id" и метрикой X.
@@ -191,6 +192,21 @@ UNKNOWN:
 
 Запрос: "сколько лайков получил создатель abc123"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{"creator_id":"abc123"}}
+
+Запрос: "сколько лайков набрал df5973c05d90471ca1a7511e2560cfbf"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{"creator_id":"df5973c05d90471ca1a7511e2560cfbf"}}
+
+Запрос: "сколько просмотров набрал abc123"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{"creator_id":"abc123"}}
+
+Запрос: "сколько лайко набрал abc123"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{"creator_id":"abc123"}}
+
+Запрос: "сколько жалоб заработал xyz"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"reports_count","table":"videos","filters":{"creator_id":"xyz"}}
+
+Запрос: "сколько просмотров собрал abc"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{"creator_id":"abc"}}
 
 Запрос: "сколько комментариев у автора abc за октябрь"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"comments_count","table":"videos","filters":{"creator_id":"abc","date_from":"2025-10-01","date_to":"2025-10-31"}}

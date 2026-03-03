@@ -33,7 +33,8 @@ async def execute_intent(
         # AGGREGATE → одно число
         value = await connection.fetchval(query, *params, timeout=sql_timeout_seconds)
         if value is None:
-            return 0
+            # SUM/AVG возвращают NULL при отсутствии строк; COUNT всегда возвращает число
+            return 0  # COUNT(*) = 0 при пустом наборе; SUM/AVG без строк тоже даём 0
         operation = intent.params.get("operation", "")
         if operation == "AVG":
             return round(float(value), 2)

@@ -173,6 +173,9 @@ Examples:
 
 "среднее количество замеров на видео"
 {"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{}}
+
+"сколько видео на одного автора в среднем"
+{"intent_type":"AGGREGATE","operation":"AVG","metric":"creator_video_count","table":"videos","filters":{}}
 """
 
 
@@ -271,6 +274,7 @@ UNKNOWN:
 22) "System/platform/database/service" = all videos in videos table, no filters.
 23) hour_from and hour_to — integers 0–23, filter by snapshot hour ("from 10:00 to 15:00" → hour_from=10, hour_to=15; upper bound exclusive: covers 10,11,12,13,14). Both fields required together.
 24) "Average number of snapshots per video" → AGGREGATE, operation=AVG, metric=snapshot_count, table=video_snapshots. Never use metric="*" with operation=AVG.
+24b) "Average number of videos per creator/author" → AGGREGATE, operation=AVG, metric=creator_video_count, table=videos.
 25) "How many distinct days did creator X publish videos" → AGGREGATE, operation=COUNT_DISTINCT, metric=publish_date, table=videos, filters with creator_id and/or dates.
 26) "When was video UUID published/released", "publish date of video UUID" → AGGREGATE, operation=MIN, metric=video_created_at, table=videos, filters={video_id: UUID}. Do NOT use VIDEO_DATE_RANGE for such queries! VIDEO_DATE_RANGE is ONLY the global date range of all videos without a specific video.
 27) "Статистика/расскажи/покажи про видео <ID>", "что у видео <ID>" → VIDEO_DETAIL with video_id=<ID>.
@@ -499,6 +503,9 @@ Query: "в скольких днях создатель abc123 публиков�
 Query: "среднее количество замеров на видео"
 {"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{}}
 
+Query: "сколько видео на одного автора в среднем"
+{"intent_type":"AGGREGATE","operation":"AVG","metric":"creator_video_count","table":"videos","filters":{}}
+
 Query: "среднее число замеров за ноябрь на видео"
 {"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
 
@@ -558,6 +565,16 @@ Query: "привет"
 """
 
 _UNKNOWN_INTENT = Intent(IntentType.UNKNOWN, {})
+
+_token_log: list[dict] = []
+
+
+def pop_token_log() -> list[dict]:
+    """Drain and return token usage records collected since the last call (testing only)."""
+    out = _token_log.copy()
+    _token_log.clear()
+    return out
+
 
 _LOOKUP_ID_FIELDS = {"creator_id", "id"}
 _LOOKUP_AGGREGATES = {"SUM", "COUNT"}
@@ -768,7 +785,10 @@ async def parse_intent_with_llm(text: str, settings: Settings) -> Intent:
             )
         return _UNKNOWN_INTENT
 
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    client_kwargs: dict = {"api_key": settings.openai_api_key}
+    if settings.openai_base_url:
+        client_kwargs["base_url"] = settings.openai_base_url
+    client = AsyncOpenAI(**client_kwargs)
     prompt_variants = [COMPACT_SYSTEM_PROMPT] if settings.llm_compact_prompt_enabled else [SYSTEM_PROMPT]
     if settings.llm_compact_prompt_enabled and settings.llm_compact_retry_full:
         prompt_variants.append(SYSTEM_PROMPT)
@@ -798,6 +818,13 @@ async def parse_intent_with_llm(text: str, settings: Settings) -> Intent:
             if settings.llm_debug_logging:
                 logger.exception("LLM request failed: %s", exc)
             continue
+
+        if response.usage:
+            _token_log.append({
+                "prompt_tokens": response.usage.prompt_tokens,
+                "completion_tokens": response.usage.completion_tokens,
+                "variant": "compact" if prompt is COMPACT_SYSTEM_PROMPT else "full",
+            })
 
         content = response.choices[0].message.content or "{}"
         if settings.llm_debug_logging:

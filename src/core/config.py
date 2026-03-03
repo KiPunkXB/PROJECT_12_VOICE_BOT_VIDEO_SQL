@@ -10,6 +10,7 @@ class Settings:
     database_url: str
     sql_timeout_seconds: float = 2.0
     openai_api_key: str = ""
+    openai_base_url: str = ""
     openai_model: str = "gpt-4o-mini"
     llm_parser_enabled: bool = True
     log_level: str = "INFO"
@@ -46,6 +47,7 @@ def get_settings() -> Settings:
         database_url=database_url,
         sql_timeout_seconds=timeout,
         openai_api_key=os.getenv("OPENAI_API_KEY", "").strip(),
+        openai_base_url=os.getenv("OPENAI_BASE_URL", "").strip(),
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini",
         llm_parser_enabled=llm_enabled,
         log_level=log_level,

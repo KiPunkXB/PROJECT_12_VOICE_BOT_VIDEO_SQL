@@ -17,6 +17,8 @@ ALLOWED_METRICS: dict[str, set[str]] = {
         "publish_date",
         # дата публикации (используется для возврата даты конкретного видео)
         "video_created_at",
+        # virtual: среднее число видео на одного создателя
+        "creator_video_count",
     },
     "video_snapshots": {
         "*",
@@ -268,6 +270,14 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
         if operation == "AVG" and metric == "snapshot_count":
             where_inner, values, _ = _build_where(table, filters)
             inner = f"SELECT COUNT(*) AS _cnt FROM {table}{where_inner} GROUP BY video_id"
+            query = f"SELECT AVG(_cnt)::bigint FROM ({inner}) AS _sub;"
+            return query, tuple(values)
+
+        # Специальный случай: AVG(creator_video_count) = среднее число видео на одного создателя
+        # SQL: SELECT AVG(cnt)::bigint FROM (SELECT COUNT(*) AS cnt FROM videos [WHERE] GROUP BY creator_id) AS _sub
+        if operation == "AVG" and metric == "creator_video_count":
+            where_inner, values, _ = _build_where("videos", filters)
+            inner = f"SELECT COUNT(*) AS _cnt FROM videos{where_inner} GROUP BY creator_id"
             query = f"SELECT AVG(_cnt)::bigint FROM ({inner}) AS _sub;"
             return query, tuple(values)
 

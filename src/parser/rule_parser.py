@@ -90,8 +90,13 @@ def normalize_text(text: str) -> str:
     normalized = re.sub(r"\bвиде\b", "видео", normalized)
 
     normalized = re.sub(r"\bдиапозон\b", "диапазон", normalized)
-    normalized = re.sub(r"\bскока\b", "сколько", normalized)
+    normalized = re.sub(r"\bскока\w*", "сколько", normalized)
     normalized = re.sub(r"\bмасимальн\w*", "максимальн", normalized)
+    normalized = re.sub(r"\bкраеатор\w*", "креатор", normalized)
+    normalized = re.sub(r"\bкратор\w*", "креатор", normalized)
+    normalized = re.sub(r"\bкретор\w*", "креатор", normalized)
+    normalized = re.sub(r"\bоного\b", "одного", normalized)
+    normalized = re.sub(r"\bсредем\b", "среднем", normalized)
 
     # normalize threshold spellings like 100k, 100к -> 100000
     normalized = re.sub(r"(\d+)\s*[kк]\b", lambda m: str(int(m.group(1)) * 1000), normalized)
@@ -300,6 +305,22 @@ def parse_intent(text: str) -> Intent:
                     "filters": {"filter_lt_field": delta_field, "filter_lt_value": 0},
                 },
             )
+
+    # Rule 4b: AVG videos per creator ("сколько видео на одного автора в среднем")
+    if (
+        "видео" in normalized
+        and ("на одного" in normalized or "на каждого" in normalized)
+        and ("автор" in normalized or "создател" in normalized or "креатор" in normalized)
+    ):
+        return Intent(
+            intent_type=IntentType.AGGREGATE,
+            params={
+                "operation": "AVG",
+                "metric": "creator_video_count",
+                "table": "videos",
+                "filters": {},
+            },
+        )
 
     # Rule 5: COUNT all videos
     if (

@@ -13,6 +13,34 @@ from src.sql.queries import ALLOWED_METRICS, ALLOWED_OPERATIONS
 
 logger = logging.getLogger(__name__)
 
+COMPACT_SYSTEM_PROMPT = """You are an NLU parser for Russian video analytics queries.
+Return ONLY JSON with one of intent_type:
+- AGGREGATE
+- LOOKUP_ID
+- VIDEO_DATE_RANGE
+- UNKNOWN
+
+AGGREGATE format:
+{"intent_type":"AGGREGATE","operation":"COUNT|SUM|AVG|MAX|MIN|COUNT_DISTINCT","metric":"<field> or *","table":"videos|video_snapshots","filters":{"creator_id":null,"video_id":null,"date_from":"YYYY-MM-DD|null","date_to":"YYYY-MM-DD|null","hour_from":null,"hour_to":null,"filter_field":null,"filter_gt":null,"filter_lt_field":null,"filter_lt_value":null,"filter_eq_field":null,"filter_eq_value":null}}
+
+LOOKUP_ID format:
+{"intent_type":"LOOKUP_ID","id_field":"creator_id|id","aggregate":"SUM|COUNT","metric":"<field> or *","table":"videos","filters":{}}
+
+VIDEO_DATE_RANGE format:
+{"intent_type":"VIDEO_DATE_RANGE"}
+
+UNKNOWN format:
+{"intent_type":"UNKNOWN"}
+
+Rules:
+1) No SQL text, JSON only.
+2) If unsure -> UNKNOWN.
+3) If query asks date range of all videos -> VIDEO_DATE_RANGE.
+4) growth/increase/new views -> metric delta_* in video_snapshots.
+5) if month mentioned without year, use 2025.
+6) UUID with dashes => video_id; 32-char hex => creator_id.
+"""
+
 
 SYSTEM_PROMPT = """You are an NLU parser for video analytics queries on a platform.
 Convert the Russian user query into an intent JSON object.
@@ -494,42 +522,58 @@ async def parse_intent_with_llm(text: str, settings: Settings) -> Intent:
             )
         return _UNKNOWN_INTENT
 
-    if settings.llm_debug_logging:
-        logger.info("LLM request text=%r model=%s", text, settings.openai_model)
-
     client = AsyncOpenAI(api_key=settings.openai_api_key)
-    try:
-        response = await client.chat.completions.create(
-            model=settings.openai_model,
-            temperature=0,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": text},
-            ],
-        )
-    except Exception as exc:
+    prompt_variants = [COMPACT_SYSTEM_PROMPT] if settings.llm_compact_prompt_enabled else [SYSTEM_PROMPT]
+    if settings.llm_compact_prompt_enabled and settings.llm_compact_retry_full:
+        prompt_variants.append(SYSTEM_PROMPT)
+
+    last_intent = _UNKNOWN_INTENT
+    for idx, prompt in enumerate(prompt_variants, start=1):
         if settings.llm_debug_logging:
-            logger.exception("LLM request failed: %s", exc)
-        return _UNKNOWN_INTENT
+            logger.info(
+                "LLM request text=%r model=%s prompt_variant=%s/%s compact=%s",
+                text,
+                settings.openai_model,
+                idx,
+                len(prompt_variants),
+                prompt is COMPACT_SYSTEM_PROMPT,
+            )
+        try:
+            response = await client.chat.completions.create(
+                model=settings.openai_model,
+                temperature=0,
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": text},
+                ],
+            )
+        except Exception as exc:
+            if settings.llm_debug_logging:
+                logger.exception("LLM request failed: %s", exc)
+            continue
 
-    content = response.choices[0].message.content or "{}"
-    if settings.llm_debug_logging:
-        logger.info("LLM raw response content=%s", content[:1200])
-
-    try:
-        payload = json.loads(content)
-    except json.JSONDecodeError:
+        content = response.choices[0].message.content or "{}"
         if settings.llm_debug_logging:
-            logger.warning("LLM response is not valid JSON")
-        return _UNKNOWN_INTENT
+            logger.info("LLM raw response content=%s", content[:1200])
 
-    if not isinstance(payload, dict):
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError:
+            if settings.llm_debug_logging:
+                logger.warning("LLM response is not valid JSON")
+            continue
+
+        if not isinstance(payload, dict):
+            if settings.llm_debug_logging:
+                logger.warning("LLM JSON payload is not object: type=%s", type(payload).__name__)
+            continue
+
+        intent = _payload_to_intent(payload)
         if settings.llm_debug_logging:
-            logger.warning("LLM JSON payload is not object: type=%s", type(payload).__name__)
-        return _UNKNOWN_INTENT
+            logger.info("LLM parsed intent=%s payload=%s", intent.intent_type.value, payload)
+        last_intent = intent
+        if intent.intent_type != IntentType.UNKNOWN:
+            return intent
 
-    intent = _payload_to_intent(payload)
-    if settings.llm_debug_logging:
-        logger.info("LLM parsed intent=%s payload=%s", intent.intent_type.value, payload)
-    return intent
+    return last_intent

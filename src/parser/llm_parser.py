@@ -88,6 +88,8 @@ SYSTEM_PROMPT = """Ты NLU-парсер запросов к аналитике 
 10) filter_field + filter_gt для "больше N", "превысили N", "свыше N"
 11) UNKNOWN если запрос совсем не относится к аналитике видео
 12) Не выдумывай creator_id если он явно не указан
+13) creator_id есть ТОЛЬКО в таблице videos — при фильтре по creator_id всегда используй table=videos
+14) Запросы о метриках конкретного создателя (лайки, просмотры, жалобы) → SUM/AVG из videos с фильтром creator_id
 
 ━━━━━━━━━━━━━━━━━ ПРИМЕРЫ ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -145,6 +147,30 @@ SYSTEM_PROMPT = """Ты NLU-парсер запросов к аналитике 
 Запрос: "сколько видео у создателя xyz за ноябрь"
 {"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"creator_id":"xyz","date_from":"2025-11-01","date_to":"2025-11-30"}}
 
+Запрос: "сколько видео выпустил создатель abc123"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"creator_id":"abc123"}}
+
+Запрос: "сколько видео выпустил создатель abc123 в мае"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"creator_id":"abc123","date_from":"2025-05-01","date_to":"2025-05-31"}}
+
+Запрос: "сколько лайков получил создатель abc123"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{"creator_id":"abc123"}}
+
+Запрос: "сколько просмотров у создателя xyz"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{"creator_id":"xyz"}}
+
+Запрос: "сколько комментариев у автора abc за октябрь"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"comments_count","table":"videos","filters":{"creator_id":"abc","date_from":"2025-10-01","date_to":"2025-10-31"}}
+
+Запрос: "сколько жалоб на видео создателя xyz"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"reports_count","table":"videos","filters":{"creator_id":"xyz"}}
+
+Запрос: "средние просмотры видео создателя abc"
+{"intent_type":"AGGREGATE","operation":"AVG","metric":"views_count","table":"videos","filters":{"creator_id":"abc"}}
+
+Запрос: "топ 5 видео создателя abc по лайкам"
+{"intent_type":"TOP_N","metric":"likes_count","table":"videos","limit":5,"filters":{"creator_id":"abc"}}
+
 Запрос: "топ 10 видео"
 {"intent_type":"TOP_N","metric":"views_count","table":"videos","limit":10,"filters":{}}
 
@@ -192,6 +218,9 @@ def _payload_to_intent(payload: dict[str, Any]) -> Intent:
         if table not in ALLOWED_METRICS:
             return _UNKNOWN_INTENT
         if metric not in ALLOWED_METRICS[table]:
+            return _UNKNOWN_INTENT
+        # creator_id существует только в videos
+        if raw_filters.get("creator_id") and table != "videos":
             return _UNKNOWN_INTENT
 
         filters = _parse_filters(raw_filters)

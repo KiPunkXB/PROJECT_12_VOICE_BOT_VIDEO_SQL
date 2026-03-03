@@ -39,7 +39,7 @@ def get_settings() -> Settings:
         hybrid_intent_cache_size = 500
     compact_prompt_raw = os.getenv("LLM_COMPACT_PROMPT_ENABLED", "1").strip().lower()
     llm_compact_prompt_enabled = compact_prompt_raw not in {"0", "false", "no", "off"}
-    compact_retry_raw = os.getenv("LLM_COMPACT_RETRY_FULL", "1").strip().lower()
+    compact_retry_raw = os.getenv("LLM_COMPACT_RETRY_FULL", "0").strip().lower()
     llm_compact_retry_full = compact_retry_raw not in {"0", "false", "no", "off"}
     return Settings(
         telegram_bot_token=token,

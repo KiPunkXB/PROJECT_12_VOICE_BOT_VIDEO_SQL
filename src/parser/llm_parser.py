@@ -104,6 +104,21 @@ Examples:
 
 "динамика просмотров по дням за ноябрь"
 {"intent_type":"UNKNOWN"}
+
+"сколько всего авторов"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"creator_id","table":"videos","filters":{}}
+
+"самый продуктивный автор"
+{"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"COUNT","metric":"*","table":"videos","filters":{}}
+
+"какой автор выпустил больше всего видео за ноябрь"
+{"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"COUNT","metric":"*","table":"videos","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
+
+"сколько всего замеров в системе"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{}}
+
+"среднее количество замеров на видео"
+{"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{}}
 """
 
 

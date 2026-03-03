@@ -91,6 +91,7 @@ def normalize_text(text: str) -> str:
 
     normalized = re.sub(r"\bдиапозон\b", "диапазон", normalized)
     normalized = re.sub(r"\bскока\b", "сколько", normalized)
+    normalized = re.sub(r"\bмасимальн\w*", "максимальн", normalized)
 
     # normalize threshold spellings like 100k, 100к -> 100000
     normalized = re.sub(r"(\d+)\s*[kк]\b", lambda m: str(int(m.group(1)) * 1000), normalized)

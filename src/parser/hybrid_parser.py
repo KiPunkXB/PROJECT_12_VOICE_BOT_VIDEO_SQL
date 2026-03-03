@@ -56,7 +56,7 @@ async def parse_intent_hybrid(text: str, settings: Settings) -> Intent:
         return _UNKNOWN_INTENT
     if settings.llm_debug_logging:
         logger.info("Rule parser returned UNKNOWN, fallback to LLM")
-    llm_intent = await parse_intent_with_llm(text, settings)
+    llm_intent = await parse_intent_with_llm(normalized, settings)
     if settings.hybrid_intent_cache_size > 0:
         _intent_cache[normalized] = llm_intent
         _intent_cache.move_to_end(normalized)

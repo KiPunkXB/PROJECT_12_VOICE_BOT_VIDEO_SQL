@@ -35,6 +35,33 @@ MONTHS_PREP_RU = {
     "декабре": 12,
 }
 
+MONTHS_ANY_RU = {
+    "января": 1,
+    "январе": 1,
+    "февраля": 2,
+    "феврале": 2,
+    "марта": 3,
+    "марте": 3,
+    "апреля": 4,
+    "апреле": 4,
+    "мая": 5,
+    "мае": 5,
+    "июня": 6,
+    "июне": 6,
+    "июля": 7,
+    "июле": 7,
+    "августа": 8,
+    "августе": 8,
+    "сентября": 9,
+    "сентябре": 9,
+    "октября": 10,
+    "октябре": 10,
+    "ноября": 11,
+    "ноябре": 11,
+    "декабря": 12,
+    "декабре": 12,
+}
+
 
 def normalize_text(text: str) -> str:
     normalized = " ".join(text.strip().lower().split())
@@ -117,6 +144,34 @@ def parse_month_range(text: str) -> tuple[datetime, datetime] | None:
     return start, end
 
 
+def parse_month_range_any_case(text: str) -> tuple[datetime, datetime] | None:
+    month_match = re.search(
+        r"(январ[яе]|феврал[яе]|март[ае]|апрел[яе]|ма[яе]|июн[яе]|июл[яе]|август[ае]|сентябр[яе]|октябр[яе]|ноябр[яе]|декабр[яе])(?:\s+(\d{4}))?",
+        text,
+    )
+    if not month_match:
+        return None
+    month_word = month_match.group(1)
+    month = MONTHS_ANY_RU.get(month_word)
+    if month is None:
+        return None
+    year = int(month_match.group(2)) if month_match.group(2) else 2025
+    start = datetime(year, month, 1)
+    end = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
+    return start, end
+
+
+def parse_hour_range(text: str) -> tuple[int, int] | None:
+    match = re.search(r"с\s*(\d{1,2}):(\d{2})\s*до\s*(\d{1,2}):(\d{2})", text)
+    if not match:
+        return None
+    start_hour = int(match.group(1))
+    end_hour = int(match.group(3))
+    if not (0 <= start_hour <= 23 and 0 <= end_hour <= 23):
+        return None
+    return start_hour, end_hour
+
+
 def extract_creator_id(text: str) -> str | None:
     # creator ids in dataset are often 32-char hex without dashes
     hex_match = re.search(r"\b([a-f0-9]{32})\b", text)
@@ -150,7 +205,78 @@ def parse_intent(text: str) -> Intent:
     ):
         return Intent(intent_type=IntentType.VIDEO_DATE_RANGE, params={})
 
-    # Rule 2: COUNT all videos
+    # Rule 2: COUNT distinct publish days for creator in month
+    if (
+        ("календарных дня" in normalized or "календарных дней" in normalized)
+        and ("публиковал" in normalized or "вышло" in normalized)
+        and "видео" in normalized
+    ):
+        creator_id = extract_creator_id(normalized)
+        month_range = parse_month_range_any_case(normalized)
+        if creator_id and month_range is not None:
+            start, end = month_range
+            return Intent(
+                intent_type=IntentType.AGGREGATE,
+                params={
+                    "operation": "COUNT_DISTINCT",
+                    "metric": "publish_date",
+                    "table": "videos",
+                    "filters": {"creator_id": creator_id, "date_from": start, "date_to": end},
+                },
+            )
+
+    # Rule 3: SUM delta views for creator in hour interval on a day
+    if (
+        "суммарно выросли" in normalized
+        and "просмотр" in normalized
+        and ("креатора" in normalized or "автора" in normalized or "создателя" in normalized)
+        and ("в промежутке" in normalized or "замер" in normalized)
+    ):
+        creator_id = extract_creator_id(normalized)
+        day = parse_single_date(normalized)
+        hour_range = parse_hour_range(normalized)
+        if creator_id and day is not None and hour_range is not None:
+            start, end = day
+            hour_from, hour_to = hour_range
+            return Intent(
+                intent_type=IntentType.AGGREGATE,
+                params={
+                    "operation": "SUM",
+                    "metric": "delta_views_count",
+                    "table": "video_snapshots",
+                    "filters": {
+                        "creator_id": creator_id,
+                        "date_from": start,
+                        "date_to": end,
+                        "hour_from": hour_from,
+                        "hour_to": hour_to,
+                    },
+                },
+            )
+
+    # Rule 4: COUNT snapshots with negative deltas
+    if "замер" in normalized and ("отрицательн" in normalized or "меньше" in normalized):
+        delta_field = None
+        if "просмотр" in normalized:
+            delta_field = "delta_views_count"
+        elif "лайк" in normalized:
+            delta_field = "delta_likes_count"
+        elif "коммент" in normalized:
+            delta_field = "delta_comments_count"
+        elif "жалоб" in normalized:
+            delta_field = "delta_reports_count"
+        if delta_field is not None:
+            return Intent(
+                intent_type=IntentType.AGGREGATE,
+                params={
+                    "operation": "COUNT",
+                    "metric": "*",
+                    "table": "video_snapshots",
+                    "filters": {"filter_lt_field": delta_field, "filter_lt_value": 0},
+                },
+            )
+
+    # Rule 5: COUNT all videos
     if (
         "видео" in normalized
         and "сколько" in normalized
@@ -164,13 +290,13 @@ def parse_intent(text: str) -> Intent:
         and "лайк" not in normalized
         and "коммент" not in normalized
         and "жалоб" not in normalized
-    ):
-        return Intent(
-            intent_type=IntentType.AGGREGATE,
-            params={"operation": "COUNT", "metric": "*", "table": "videos", "filters": {}},
-        )
+        ):
+            return Intent(
+                intent_type=IntentType.AGGREGATE,
+                params={"operation": "COUNT", "metric": "*", "table": "videos", "filters": {}},
+            )
 
-    # Rule 3: SUM all views
+    # Rule 6: SUM all views
     if (
         "просмотр" in normalized
         and (
@@ -185,7 +311,7 @@ def parse_intent(text: str) -> Intent:
             params={"operation": "SUM", "metric": "views_count", "table": "videos", "filters": {}},
         )
 
-    # Rule 4: COUNT videos with views > N
+    # Rule 7: COUNT videos with views > N
     if "видео" in normalized and "просмотр" in normalized and "больше" in normalized:
         number_match = re.search(r"больше\s+(\d+)", normalized)
         if number_match:
@@ -200,7 +326,7 @@ def parse_intent(text: str) -> Intent:
                 },
             )
 
-    # Rule 5: SUM daily delta views
+    # Rule 8: SUM daily delta views
     if (
         "на сколько" in normalized
         and "просмотр" in normalized
@@ -220,7 +346,7 @@ def parse_intent(text: str) -> Intent:
                 },
             )
 
-    # Rule 6: COUNT DISTINCT videos with new views on day
+    # Rule 9: COUNT DISTINCT videos with new views on day
     if "разных видео" in normalized and "новые просмотры" in normalized:
         day = parse_single_date(normalized)
         if day is not None:
@@ -240,7 +366,7 @@ def parse_intent(text: str) -> Intent:
                 },
             )
 
-    # Rule 7: COUNT videos for creator in date range
+    # Rule 10: COUNT videos for creator in date range
     if ("креатор" in normalized or "создател" in normalized or "автор" in normalized) and "видео" in normalized:
         creator_id = extract_creator_id(normalized)
         date_range = parse_date_range(normalized)
@@ -256,7 +382,7 @@ def parse_intent(text: str) -> Intent:
                 },
             )
 
-    # Rule 8: COUNT videos in month
+    # Rule 11: COUNT videos in month
     if "видео" in normalized and "сколько" in normalized:
         month_range = parse_month_range(normalized)
         if month_range is not None:

@@ -10,11 +10,11 @@ from pathlib import Path
 
 import asyncpg
 from dateutil import parser as date_parser
-from src.core.env_loader import load_dotenv_if_exists
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from src.core.env_loader import load_dotenv_if_exists
 
 
 def parse_args() -> argparse.Namespace:

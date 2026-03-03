@@ -7,11 +7,10 @@ from pathlib import Path
 
 import asyncpg
 
-from src.core.env_loader import load_dotenv_if_exists
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from src.core.env_loader import load_dotenv_if_exists
 MIGRATION_FILE = ROOT / "migrations" / "001_init.sql"
 
 

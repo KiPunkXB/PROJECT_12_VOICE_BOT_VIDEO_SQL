@@ -13,6 +13,8 @@ ALLOWED_METRICS: dict[str, set[str]] = {
         "likes_count",
         "comments_count",
         "reports_count",
+        # virtual: video_created_at::date (для COUNT DISTINCT по дням публикаций)
+        "publish_date",
     },
     "video_snapshots": {
         "*",
@@ -52,6 +54,11 @@ DATE_FIELD: dict[str, str] = {
 }
 
 ALLOWED_TABLES: set[str] = {"videos", "video_snapshots"}
+
+# Виртуальные метрики → реальные SQL-выражения
+VIRTUAL_METRIC_EXPR: dict[str, str] = {
+    "publish_date": "video_created_at::date",
+}
 
 
 # ─── Вспомогательные функции ──────────────────────────────────────────────────
@@ -267,12 +274,14 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
                 f"{where};"
             )
         else:
+            # Раскрываем виртуальный метрик в реальное SQL-выражение
+            metric_expr = VIRTUAL_METRIC_EXPR.get(metric, metric)
             if operation == "COUNT_DISTINCT":
-                select = f"SELECT COUNT(DISTINCT {metric})"
+                select = f"SELECT COUNT(DISTINCT {metric_expr})"
             elif metric == "*":
                 select = f"SELECT {operation}(*)"
             else:
-                select = f"SELECT {operation}({metric})"
+                select = f"SELECT {operation}({metric_expr})"
             where, values, _ = _build_where(table, filters)
             query = f"{select}::bigint FROM {table}{where};"
 

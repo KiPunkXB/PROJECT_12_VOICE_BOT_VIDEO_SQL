@@ -95,6 +95,7 @@ UNKNOWN:
 22) "Система/платформа/база/сервис" = все видео в таблице videos, без фильтров.
 23) hour_from и hour_to — целые числа 0–23, фильтр по часу замера в video_snapshots ("с 10:00 до 15:00" → hour_from=10, hour_to=15; верхняя граница исключительно: охватывает 10, 11, 12, 13, 14). Обязательно оба поля вместе.
 24) "Среднее количество замеров на видео" → AGGREGATE, operation=AVG, metric=snapshot_count, table=video_snapshots. Никогда не используй metric="*" с operation=AVG.
+25) "В скольких разных днях/датах публиковал видео создатель X" → AGGREGATE, operation=COUNT_DISTINCT, metric=publish_date, table=videos, filters с creator_id и/или датами.
 
 ━━━━━━━━━━━━━━━━━ ПРИМЕРЫ ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -292,6 +293,15 @@ UNKNOWN:
 
 Запрос: "сколько замеров у создателя abc за 28 ноября"
 {"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"creator_id":"abc","date_from":"2025-11-28","date_to":"2025-11-28"}}
+
+Запрос: "в скольких разных календарных днях ноября 2025 публиковал видео создатель abc"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"publish_date","table":"videos","filters":{"creator_id":"abc","date_from":"2025-11-01","date_to":"2025-11-30"}}
+
+Запрос: "сколько разных дней публикации было у автора xyz за октябрь"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"publish_date","table":"videos","filters":{"creator_id":"xyz","date_from":"2025-10-01","date_to":"2025-10-31"}}
+
+Запрос: "в скольких днях создатель abc123 публиковал хотя бы одно видео"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"publish_date","table":"videos","filters":{"creator_id":"abc123"}}
 
 Запрос: "среднее количество замеров на видео"
 {"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{}}

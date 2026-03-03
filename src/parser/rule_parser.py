@@ -23,12 +23,23 @@ MONTHS_RU = {
 
 def normalize_text(text: str) -> str:
     normalized = " ".join(text.strip().lower().split())
+    # Видео — разные опечатки
     normalized = re.sub(r"видос\w*", "видео", normalized)
     normalized = re.sub(r"ролик\w*", "видео", normalized)
     normalized = re.sub(r"\bвидио\b", "видео", normalized)
     normalized = re.sub(r"\bвдио\b", "видео", normalized)
+    normalized = re.sub(r"\bвиде\b", "видео", normalized)
+    # Просмотры — разные опечатки
+    normalized = re.sub(r"просомтр\w*", "просмотров", normalized)
+    normalized = re.sub(r"простомтр\w*", "просмотров", normalized)
+    normalized = re.sub(r"промотр\w*", "просмотров", normalized)
+    normalized = re.sub(r"просотр\w*", "просмотров", normalized)
+    normalized = re.sub(r"проотр\w*", "просмотров", normalized)
+    # Прочее
     normalized = re.sub(r"\bдиапозон\b", "диапазон", normalized)
     normalized = re.sub(r"\bскока\b", "сколько", normalized)
+    normalized = re.sub(r"\bавотр\w*", "автор", normalized)
+    normalized = re.sub(r"\bлайко\b", "лайков", normalized)
     return normalized
 
 

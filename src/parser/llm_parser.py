@@ -87,6 +87,9 @@ UNKNOWN:
 16) "Какое видео самое X" → LOOKUP_ID с id_field="id".
 17) Для автора по количеству видео: aggregate="COUNT", metric="*".
 18) Для автора по сумме метрики: aggregate="SUM", metric=<поле>.
+19) "У какого автора есть видео без X" → LOOKUP_ID creator_id + filter_eq_field+filter_eq_value=0.
+20) "В каком месяце/дне/году..." → UNKNOWN (бот не отвечает датой/месяцем).
+21) "Есть ли видео без X" → AGGREGATE COUNT с filter_eq_value=0.
 
 ━━━━━━━━━━━━━━━━━ ПРИМЕРЫ ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -194,6 +197,27 @@ UNKNOWN:
 
 Запрос: "какой автор выпустил больше всего видео за ноябрь"
 {"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"COUNT","metric":"*","table":"videos","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
+
+Запрос: "у какого автора есть видео без просмотров"
+{"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"COUNT","metric":"*","table":"videos","filters":{"filter_eq_field":"views_count","filter_eq_value":0}}
+
+Запрос: "у какого автора есть видео без лайков"
+{"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"COUNT","metric":"*","table":"videos","filters":{"filter_eq_field":"likes_count","filter_eq_value":0}}
+
+Запрос: "сколько авторов имеют видео без просмотров"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"creator_id","table":"videos","filters":{"filter_eq_field":"views_count","filter_eq_value":0}}
+
+Запрос: "есть видео без просмотров в мае"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"filter_eq_field":"views_count","filter_eq_value":0,"date_from":"2025-05-01","date_to":"2025-05-31"}}
+
+Запрос: "в каком месяце больше всего видео"
+{"intent_type":"UNKNOWN"}
+
+Запрос: "в каком месяце есть видео без просмотров"
+{"intent_type":"UNKNOWN"}
+
+Запрос: "в какой день максимальный прирост"
+{"intent_type":"UNKNOWN"}
 
 Запрос: "какое видео самое просматриваемое"
 {"intent_type":"LOOKUP_ID","id_field":"id","metric":"views_count","table":"videos","filters":{}}

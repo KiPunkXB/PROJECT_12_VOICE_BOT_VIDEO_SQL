@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 from src.core.config import Settings
 from src.bot.formatting import format_numeric_response
 from src.parser.hybrid_parser import parse_intent_hybrid
+from src.parser.intents import IntentType
 from src.sql.engine import execute_intent
 
 
@@ -61,6 +62,9 @@ def build_router(pool, settings: Settings) -> Router:
         text = message.text or ""
         try:
             intent = await parse_intent_hybrid(text, settings)
+            if intent.intent_type == IntentType.UNKNOWN:
+                await message.answer("❓ Не понял запрос. Попробуй переформулировать.")
+                return
             value = await execute_intent(
                 pool=pool,
                 intent=intent,

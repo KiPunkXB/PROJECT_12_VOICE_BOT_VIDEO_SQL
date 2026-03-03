@@ -53,7 +53,7 @@ SYSTEM_PROMPT = """Ты NLU-парсер запросов к аналитике 
 ━━━━━━━━━━━━━━━━━ ФОРМАТЫ ОТВЕТА ━━━━━━━━━━━━━━━━━━━━━
 
 AGGREGATE:
-{"intent_type":"AGGREGATE","operation":"COUNT|SUM|AVG|MAX|MIN|COUNT_DISTINCT","metric":"<поле> или *","table":"videos|video_snapshots","filters":{"creator_id":null,"video_id":null,"date_from":"YYYY-MM-DD|null","date_to":"YYYY-MM-DD|null","filter_field":null,"filter_gt":null,"filter_lt_field":null,"filter_lt_value":null,"filter_eq_field":null,"filter_eq_value":null}}
+{"intent_type":"AGGREGATE","operation":"COUNT|SUM|AVG|MAX|MIN|COUNT_DISTINCT","metric":"<поле> или *","table":"videos|video_snapshots","filters":{"creator_id":null,"video_id":null,"date_from":"YYYY-MM-DD|null","date_to":"YYYY-MM-DD|null","hour_from":null,"hour_to":null,"filter_field":null,"filter_gt":null,"filter_lt_field":null,"filter_lt_value":null,"filter_eq_field":null,"filter_eq_value":null}}
 
 LOOKUP_ID (возвращает creator_id самого активного автора):
 {"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"SUM|COUNT","metric":"<поле> или *","table":"videos","filters":{}}
@@ -82,7 +82,8 @@ UNKNOWN:
 10) filter_eq_field + filter_eq_value для "ровно 0", "без просмотров", "без лайков".
 11) UNKNOWN если запрос не о видео-аналитике.
 12) Не выдумывай creator_id если он явно не указан в запросе.
-13) creator_id ТОЛЬКО в videos — при фильтре по creator_id всегда table=videos.
+13) Если нужны delta_* метрики по конкретному автору — используй table=video_snapshots и creator_id в filters (JOIN добавится автоматически).
+13b) Для итоговых метрик (views_count, likes_count и пр.) по автору — table=videos.
 14) "Топ видео по X" → LOOKUP_ID с id_field="id" и метрикой X.
 15) "Какой/самый/лучший автор" → LOOKUP_ID с id_field="creator_id".
 16) "Какое видео самое X" → LOOKUP_ID с id_field="id".
@@ -92,6 +93,7 @@ UNKNOWN:
 20) "В каком месяце/дне/году..." → UNKNOWN (бот не отвечает датой/месяцем).
 21) "Есть ли видео без X" → AGGREGATE COUNT с filter_eq_value=0.
 22) "Система/платформа/база/сервис" = все видео в таблице videos, без фильтров.
+23) hour_from и hour_to — целые числа 0–23, фильтр по часу замера в video_snapshots ("с 10:00 до 15:00" → hour_from=10, hour_to=15). Обязательно оба поля вместе.
 
 ━━━━━━━━━━━━━━━━━ ПРИМЕРЫ ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -272,6 +274,24 @@ UNKNOWN:
 Запрос: "за какой период есть видео"
 {"intent_type":"VIDEO_DATE_RANGE"}
 
+Запрос: "суммарный прирост просмотров автора abc с 10:00 до 15:00 28 ноября 2025"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_views_count","table":"video_snapshots","filters":{"creator_id":"abc","date_from":"2025-11-28","date_to":"2025-11-28","hour_from":10,"hour_to":15}}
+
+Запрос: "на сколько выросли просмотры видео автора xyz с 9 до 18 часов 1 ноября 2025"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_views_count","table":"video_snapshots","filters":{"creator_id":"xyz","date_from":"2025-11-01","date_to":"2025-11-01","hour_from":9,"hour_to":18}}
+
+Запрос: "прирост лайков с 10:00 до 15:00 28 ноября"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_likes_count","table":"video_snapshots","filters":{"date_from":"2025-11-28","date_to":"2025-11-28","hour_from":10,"hour_to":15}}
+
+Запрос: "сколько замеров с 0 до 6 часов за ноябрь"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"date_from":"2025-11-01","date_to":"2025-11-30","hour_from":0,"hour_to":6}}
+
+Запрос: "максимальный прирост просмотров у автора abc за ноябрь"
+{"intent_type":"AGGREGATE","operation":"MAX","metric":"delta_views_count","table":"video_snapshots","filters":{"creator_id":"abc","date_from":"2025-11-01","date_to":"2025-11-30"}}
+
+Запрос: "сколько замеров у создателя abc за 28 ноября"
+{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"creator_id":"abc","date_from":"2025-11-28","date_to":"2025-11-28"}}
+
 Запрос: "погода в москве"
 {"intent_type":"UNKNOWN"}
 
@@ -312,6 +332,24 @@ def _parse_filters(raw: dict) -> dict | None:
         try:
             filters["date_to"] = _parse_date(str(date_to_raw)) + timedelta(days=1)
         except ValueError:
+            return None
+
+    hour_from = raw.get("hour_from")
+    if hour_from is not None:
+        try:
+            h = int(hour_from)
+            if 0 <= h <= 23:
+                filters["hour_from"] = h
+        except (TypeError, ValueError):
+            return None
+
+    hour_to = raw.get("hour_to")
+    if hour_to is not None:
+        try:
+            h = int(hour_to)
+            if 0 <= h <= 23:
+                filters["hour_to"] = h
+        except (TypeError, ValueError):
             return None
 
     filter_field = raw.get("filter_field")
@@ -371,8 +409,6 @@ def _payload_to_intent(payload: dict[str, Any]) -> Intent:
         if table not in ALLOWED_METRICS:
             return _UNKNOWN_INTENT
         if metric not in ALLOWED_METRICS[table]:
-            return _UNKNOWN_INTENT
-        if raw_filters.get("creator_id") and table != "videos":
             return _UNKNOWN_INTENT
 
         filters = _parse_filters(raw_filters)

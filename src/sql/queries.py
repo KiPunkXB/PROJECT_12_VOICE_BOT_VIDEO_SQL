@@ -99,6 +99,13 @@ def _build_where(
         values.append(date_to)
         i += 1
 
+    hour_from = filters.get("hour_from")
+    hour_to = filters.get("hour_to")
+    if hour_from is not None and hour_to is not None:
+        conditions.append(f"EXTRACT(HOUR FROM {date_col}) BETWEEN ${i} AND ${i + 1}")
+        values.extend([int(hour_from), int(hour_to)])
+        i += 2
+
     filter_field = filters.get("filter_field")
     filter_gt = filters.get("filter_gt")
     if filter_field is not None and filter_gt is not None:
@@ -140,6 +147,80 @@ def _build_where(
     return where, values, i
 
 
+def _build_join_where_snapshots(
+    filters: dict,
+    param_offset: int = 1,
+) -> tuple[str, list, int]:
+    """WHERE clause для: video_snapshots vs JOIN videos v ON v.id = vs.video_id.
+
+    creator_id фильтрует по v.creator_id, всё остальное — по vs.*.
+    """
+    conditions: list[str] = []
+    values: list = []
+    i = param_offset
+
+    creator_id = filters.get("creator_id")
+    if creator_id:
+        conditions.append(f"v.creator_id = ${i}")
+        values.append(str(creator_id))
+        i += 1
+
+    video_id = filters.get("video_id")
+    if video_id:
+        conditions.append(f"vs.video_id = ${i}")
+        values.append(str(video_id))
+        i += 1
+
+    date_from = filters.get("date_from")
+    if date_from is not None:
+        conditions.append(f"vs.created_at >= ${i}")
+        values.append(date_from)
+        i += 1
+
+    date_to = filters.get("date_to")
+    if date_to is not None:
+        conditions.append(f"vs.created_at < ${i}")
+        values.append(date_to)
+        i += 1
+
+    hour_from = filters.get("hour_from")
+    hour_to = filters.get("hour_to")
+    if hour_from is not None and hour_to is not None:
+        conditions.append(f"EXTRACT(HOUR FROM vs.created_at) BETWEEN ${i} AND ${i + 1}")
+        values.extend([int(hour_from), int(hour_to)])
+        i += 2
+
+    filter_field = filters.get("filter_field")
+    filter_gt = filters.get("filter_gt")
+    if filter_field is not None and filter_gt is not None:
+        if filter_field not in ALLOWED_FILTER_FIELDS["video_snapshots"]:
+            raise ValueError(f"Unknown filter_field: {filter_field!r}")
+        conditions.append(f"vs.{filter_field} > ${i}")
+        values.append(int(filter_gt))
+        i += 1
+
+    filter_eq_field = filters.get("filter_eq_field")
+    filter_eq_value = filters.get("filter_eq_value")
+    if filter_eq_field is not None and filter_eq_value is not None:
+        if filter_eq_field not in ALLOWED_FILTER_FIELDS.get("video_snapshots", set()):
+            raise ValueError(f"Unknown filter_eq_field: {filter_eq_field!r}")
+        conditions.append(f"vs.{filter_eq_field} = ${i}")
+        values.append(int(filter_eq_value))
+        i += 1
+
+    filter_lt_field = filters.get("filter_lt_field")
+    filter_lt_value = filters.get("filter_lt_value")
+    if filter_lt_field is not None and filter_lt_value is not None:
+        if filter_lt_field not in ALLOWED_FILTER_FIELDS.get("video_snapshots", set()):
+            raise ValueError(f"Unknown filter_lt_field: {filter_lt_field!r}")
+        conditions.append(f"vs.{filter_lt_field} < ${i}")
+        values.append(int(filter_lt_value))
+        i += 1
+
+    where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+    return where, values, i
+
+
 # ─── Основная функция построения запроса ─────────────────────────────────────
 
 def build_query(intent: Intent) -> tuple[str, tuple]:
@@ -154,15 +235,31 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
 
         _validate(table, operation, metric)
 
-        if operation == "COUNT_DISTINCT":
-            select = f"SELECT COUNT(DISTINCT {metric})"
-        elif metric == "*":
-            select = f"SELECT {operation}(*)"
+        # Если запрос к video_snapshots + фильтр по creator_id → нужен JOIN с videos
+        needs_join = table == "video_snapshots" and "creator_id" in filters
+        if needs_join:
+            if operation == "COUNT_DISTINCT":
+                select = f"SELECT COUNT(DISTINCT vs.{metric})"
+            elif metric == "*":
+                select = f"SELECT {operation}(*)"
+            else:
+                select = f"SELECT {operation}(vs.{metric})"
+            where, values, _ = _build_join_where_snapshots(filters)
+            query = (
+                f"{select}::bigint "
+                f"FROM video_snapshots vs JOIN videos v ON v.id = vs.video_id"
+                f"{where};"
+            )
         else:
-            select = f"SELECT {operation}({metric})"
+            if operation == "COUNT_DISTINCT":
+                select = f"SELECT COUNT(DISTINCT {metric})"
+            elif metric == "*":
+                select = f"SELECT {operation}(*)"
+            else:
+                select = f"SELECT {operation}({metric})"
+            where, values, _ = _build_where(table, filters)
+            query = f"{select}::bigint FROM {table}{where};"
 
-        where, values, _ = _build_where(table, filters)
-        query = f"{select}::bigint FROM {table}{where};"
         return query, tuple(values)
 
     if itype == IntentType.LOOKUP_ID:

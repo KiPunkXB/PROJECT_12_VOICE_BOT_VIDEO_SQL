@@ -111,20 +111,34 @@ def normalize_text(text: str) -> str:
 
 
 def parse_single_date(text: str) -> tuple[datetime, datetime] | None:
-    pattern = (
+    # With year: "28 ноября 2025"
+    pattern_full = (
         r"(\d{1,2})\s+"
         r"(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+"
         r"(\d{4})"
     )
-    match = re.search(pattern, text)
-    if not match:
-        return None
-    day = int(match.group(1))
-    month = MONTHS_RU[match.group(2)]
-    year = int(match.group(3))
-    start = datetime(year, month, day)
-    end = start + timedelta(days=1)
-    return start, end
+    match = re.search(pattern_full, text)
+    if match:
+        day = int(match.group(1))
+        month = MONTHS_RU[match.group(2)]
+        year = int(match.group(3))
+        start = datetime(year, month, day)
+        return start, start + timedelta(days=1)
+
+    # Without year: "2 декабря" → default 2025
+    pattern_no_year = (
+        r"(\d{1,2})\s+"
+        r"(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
+        r"(?!\s+\d{4})"
+    )
+    match = re.search(pattern_no_year, text)
+    if match:
+        day = int(match.group(1))
+        month = MONTHS_RU[match.group(2)]
+        start = datetime(2025, month, day)
+        return start, start + timedelta(days=1)
+
+    return None
 
 
 def parse_date_range(text: str) -> tuple[datetime, datetime] | None:
@@ -383,6 +397,31 @@ def parse_intent(text: str) -> Intent:
                     "filters": {"filter_field": "views_count", "filter_gt": threshold},
                 },
             )
+
+    # Rule 7b: "сколько просмотров/лайков/комментариев/жалоб <дата>" → SUM(delta_X) за день
+    if "сколько" in normalized:
+        day = parse_single_date(normalized)
+        if day is not None:
+            metric = None
+            if "просмотр" in normalized:
+                metric = "delta_views_count"
+            elif "лайк" in normalized:
+                metric = "delta_likes_count"
+            elif "коммент" in normalized:
+                metric = "delta_comments_count"
+            elif "жалоб" in normalized:
+                metric = "delta_reports_count"
+            if metric is not None:
+                start, end = day
+                return Intent(
+                    intent_type=IntentType.AGGREGATE,
+                    params={
+                        "operation": "SUM",
+                        "metric": metric,
+                        "table": "video_snapshots",
+                        "filters": {"date_from": start, "date_to": end},
+                    },
+                )
 
     # Rule 8: SUM daily delta views
     if (

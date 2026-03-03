@@ -117,6 +117,12 @@ Examples:
 "прирост просмотров 28 ноября 2025"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_views_count","table":"video_snapshots","filters":{"date_from":"2025-11-28","date_to":"2025-11-28"}}
 
+"сколько просмотров 2 декабря"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_views_count","table":"video_snapshots","filters":{"date_from":"2025-12-02","date_to":"2025-12-02"}}
+
+"сколько лайков 15 ноября"
+{"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_likes_count","table":"video_snapshots","filters":{"date_from":"2025-11-15","date_to":"2025-11-15"}}
+
 "сколько лайков у видео ecd8a4e4-1f24"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{"video_id":"ecd8a4e4-1f24"}}
 

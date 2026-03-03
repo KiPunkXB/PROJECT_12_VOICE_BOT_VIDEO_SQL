@@ -5,7 +5,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 
 from src.core.config import Settings
-from src.bot.formatting import format_numeric_response
+from src.bot.formatting import format_numeric_response, format_top_n
 from src.parser.hybrid_parser import parse_intent_hybrid
 from src.sql.engine import execute_intent
 
@@ -13,24 +13,32 @@ from src.sql.engine import execute_intent
 START_MESSAGE = (
     "👋 Привет! Я бот аналитики видео.\n\n"
     "✨ Что умею:\n"
-    "• считаю метрики по базе `videos` и `video_snapshots`;\n"
-    "• понимаю запросы на русском;\n"
-    "• отвечаю одним числом (формат для автопроверки).\n\n"
+    "• считаю любые метрики: просмотры, лайки, комментарии, жалобы;\n"
+    "• фильтрую по дате, создателю, конкретному видео;\n"
+    "• понимаю запросы на русском (в том числе с опечатками);\n"
+    "• показываю топ видео по любому показателю.\n\n"
     "🧪 Примеры запросов:\n"
-    "1) Сколько всего видео есть в системе?\n"
-    "2) Сколько видео набрало больше 100 000 просмотров за всё время?\n"
-    "3) На сколько просмотров в сумме выросли все видео 28 ноября 2025?\n"
-    "4) Сколько разных видео получали новые просмотры 27 ноября 2025?\n\n"
+    "1) Сколько всего видео в системе?\n"
+    "2) Сколько лайков у видео 42?\n"
+    "3) Прирост просмотров 28 ноября 2025\n"
+    "4) Топ 10 видео по лайкам\n"
+    "5) Сколько видео у создателя abc за ноябрь?\n"
+    "6) Средние просмотры на видео\n\n"
     "ℹ️ Введи /help, если нужен мини-гайд."
 )
 
 HELP_MESSAGE = (
     "📌 Мини-гайд\n\n"
     "• Отправь текстовый запрос на русском.\n"
-    "• В ответ вернется только число.\n"
+    "• Поддерживаемые метрики: просмотры, лайки, комментарии, жалобы.\n"
+    "• Поддерживаемые операции: сколько, сумма, среднее, максимум, топ N.\n"
+    "• Фильтры: по дате, по создателю, по ID видео, по порогу.\n"
     "• Поддерживаются даты вида: `28 ноября 2025`, `с 1 по 5 ноября 2025`.\n\n"
-    "💡 Совет: формулируй вопрос коротко и конкретно.\n"
-    "Например: `Сколько всего видео есть в системе?`"
+    "💡 Примеры:\n"
+    "• `Сколько видео в августе?`\n"
+    "• `Сумма лайков за ноябрь 2025`\n"
+    "• `Топ 5 по комментариям`\n"
+    "• `Видео с просмотрами больше 100000`"
 )
 
 
@@ -54,7 +62,9 @@ def build_router(pool, settings: Settings) -> Router:
             intent=intent,
             sql_timeout_seconds=settings.sql_timeout_seconds,
         )
-        if isinstance(value, (int, float)):
+        if isinstance(value, list):
+            await message.answer(format_top_n(value))
+        elif isinstance(value, (int, float)):
             await message.answer(format_numeric_response(value))
         else:
             await message.answer(str(value))

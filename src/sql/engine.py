@@ -10,11 +10,12 @@ async def execute_intent(
     pool: asyncpg.Pool,
     intent: Intent,
     sql_timeout_seconds: float,
-) -> int | str:
+) -> int | float | str | list:
     if intent.intent_type == IntentType.UNKNOWN:
         return 0
 
     query, params = build_query(intent)
+
     async with pool.acquire() as connection:
         if intent.intent_type == IntentType.VIDEO_DATE_RANGE:
             row = await connection.fetchrow(query, *params, timeout=sql_timeout_seconds)
@@ -22,5 +23,22 @@ async def execute_intent(
                 return "Нет данных"
             return f"{row['min_date']} — {row['max_date']}"
 
+        if intent.intent_type == IntentType.TOP_N:
+            rows = await connection.fetch(query, *params, timeout=sql_timeout_seconds)
+            metric = intent.params["metric"]
+            return [
+                {"video_id": r["video_id"], "metric": metric, "value": int(r[metric])}
+                for r in rows
+            ]
+
+        # AGGREGATE → одно число (int или float для AVG)
         value = await connection.fetchval(query, *params, timeout=sql_timeout_seconds)
-    return int(value or 0)
+
+        if value is None:
+            return 0
+
+        operation = intent.params.get("operation", "")
+        if operation == "AVG":
+            return round(float(value), 2)
+
+        return int(value)

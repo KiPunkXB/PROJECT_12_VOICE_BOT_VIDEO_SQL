@@ -20,6 +20,14 @@ MONTHS_RU = {
     "декабря": 12,
 }
 
+# Ключевые слова для определения метрики в TOP_N из rule parser
+_METRIC_KEYWORDS: dict[str, str] = {
+    "лайк": "likes_count",
+    "коммент": "comments_count",
+    "жалоб": "reports_count",
+    "просмотр": "views_count",
+}
+
 
 def normalize_text(text: str) -> str:
     normalized = " ".join(text.strip().lower().split())
@@ -28,18 +36,8 @@ def normalize_text(text: str) -> str:
     normalized = re.sub(r"\bвидио\b", "видео", normalized)
     normalized = re.sub(r"\bвдио\b", "видео", normalized)
     normalized = re.sub(r"\bдиапозон\b", "диапазон", normalized)
+    normalized = re.sub(r"\bскока\b", "сколько", normalized)
     return normalized
-
-
-def normalize_number(raw: str) -> int:
-    value = raw.strip().lower().replace(" ", "")
-    multiplier = 1
-    if value.endswith("k") or value.endswith("к"):
-        multiplier = 1000
-        value = value[:-1]
-    if value == "":
-        return 0
-    return int(float(value) * multiplier)
 
 
 def parse_single_date(text: str) -> tuple[datetime, datetime] | None:
@@ -56,7 +54,6 @@ def parse_single_date(text: str) -> tuple[datetime, datetime] | None:
 
 
 def parse_date_range(text: str) -> tuple[datetime, datetime] | None:
-    # Example: "с 28 мая 2025 по 30 ноября 2025"
     full_pattern = (
         r"с\s+(\d{1,2})\s+"
         r"(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+"
@@ -66,47 +63,26 @@ def parse_date_range(text: str) -> tuple[datetime, datetime] | None:
     )
     full_match = re.search(full_pattern, text)
     if full_match:
-        day_start = int(full_match.group(1))
-        month_start = MONTHS_RU[full_match.group(2)]
-        year_start = int(full_match.group(3))
-        day_end = int(full_match.group(4))
-        month_end = MONTHS_RU[full_match.group(5)]
-        year_end = int(full_match.group(6))
-        start = datetime(year_start, month_start, day_start)
-        end = datetime(year_end, month_end, day_end) + timedelta(days=1)
+        start = datetime(int(full_match.group(3)), MONTHS_RU[full_match.group(2)], int(full_match.group(1)))
+        end = datetime(int(full_match.group(6)), MONTHS_RU[full_match.group(5)], int(full_match.group(4))) + timedelta(days=1)
         return start, end
 
-    # Example: "с 1 по 5 ноября 2025"
     pattern = r"с\s+(\d{1,2})\s+по\s+(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})"
     match = re.search(pattern, text)
     if match:
-        day_start = int(match.group(1))
-        day_end = int(match.group(2))
         month = MONTHS_RU[match.group(3)]
         year = int(match.group(4))
-        start = datetime(year, month, day_start)
-        end = datetime(year, month, day_end) + timedelta(days=1)
+        start = datetime(year, month, int(match.group(1)))
+        end = datetime(year, month, int(match.group(2))) + timedelta(days=1)
         return start, end
+
     return parse_single_date(text)
-
-
-def extract_creator_id(text: str) -> str | None:
-    patterns = [
-        r"креатор[а-я\s]*id\s*[:=]?\s*([a-z0-9-]+)",
-        r"creator_id\s*[:=]?\s*([a-z0-9-]+)",
-        r"id\s*[:=]?\s*([a-z0-9-]+)",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, text)
-        if match:
-            return str(match.group(1))
-    return None
 
 
 def parse_intent(text: str) -> Intent:
     normalized = normalize_text(text)
 
-    # Rule 0: VIDEO_DATE_RANGE
+    # Rule 1: VIDEO_DATE_RANGE — специфичные ключевые слова
     if (
         "диапазон дат" in normalized
         or (
@@ -123,73 +99,22 @@ def parse_intent(text: str) -> Intent:
     ):
         return Intent(intent_type=IntentType.VIDEO_DATE_RANGE, params={})
 
-    # Rule 1: COUNT_VIDEOS_CREATOR_DATE_RANGE
-    if "креатор" in normalized and "видео" in normalized:
-        creator_id = extract_creator_id(normalized)
-        date_range = parse_date_range(normalized)
-        if creator_id is not None and date_range is not None:
-            start, end = date_range
-            return Intent(
-                intent_type=IntentType.COUNT_VIDEOS_CREATOR_DATE_RANGE,
-                params={"creator_id": creator_id, "start": start, "end": end},
-            )
+    # Rule 2: TOP_N — "топ N видео/по лайкам/..."
+    if ("топ" in normalized or "top" in normalized) and "видео" in normalized:
+        limit_match = re.search(r"(?:топ|top)\s+(\d+)", normalized)
+        limit = int(limit_match.group(1)) if limit_match else 10
 
-    # Rule 2: COUNT_VIDEOS_VIEWS_GT
-    if "больше" in normalized and "просмотр" in normalized and "видео" in normalized:
-        number_match = re.search(r"больше\s+([0-9kк\s]+)", normalized)
-        if number_match:
-            threshold = normalize_number(number_match.group(1))
-            return Intent(
-                intent_type=IntentType.COUNT_VIDEOS_VIEWS_GT,
-                params={"threshold": threshold},
-            )
+        # Определяем метрику из контекста
+        metric = "views_count"
+        for kw, field in _METRIC_KEYWORDS.items():
+            if kw in normalized:
+                metric = field
+                break
 
-    # Rule 3: SUM_DELTA_VIEWS_DAY
-    if (
-        "на сколько" in normalized
-        and "просмотр" in normalized
-        and "в сумме" in normalized
-        and "вырос" in normalized
-    ):
-        date_range = parse_single_date(normalized)
-        if date_range is not None:
-            start, end = date_range
-            return Intent(
-                intent_type=IntentType.SUM_DELTA_VIEWS_DAY,
-                params={"start": start, "end": end},
-            )
-
-    # Rule 4: SUM_VIEWS_ALL
-    if "просмотр" in normalized and (
-        "сколько всего просмотров" in normalized
-        or "сколько просмотров всего" in normalized
-        or "всего просмотров" in normalized
-        or "общее количество просмотров" in normalized
-        or "сумма просмотров" in normalized
-    ):
-        return Intent(intent_type=IntentType.SUM_VIEWS_ALL, params={})
-
-    # Rule 5: COUNT_DISTINCT_VIDEOS_WITH_NEW_VIEWS_DAY
-    if "разных видео" in normalized and "новые просмотры" in normalized:
-        date_range = parse_single_date(normalized)
-        if date_range is not None:
-            start, end = date_range
-            return Intent(
-                intent_type=IntentType.COUNT_DISTINCT_VIDEOS_WITH_NEW_VIEWS_DAY,
-                params={"start": start, "end": end},
-            )
-
-    # Rule 6: COUNT_VIDEOS_ALL
-    if (
-        "сколько" in normalized
-        and "видео" in normalized
-        and (
-            "всего" in normalized
-            or "всех" in normalized
-            or "есть в системе" in normalized
-            or "имеется" in normalized
+        return Intent(
+            intent_type=IntentType.TOP_N,
+            params={"metric": metric, "table": "videos", "limit": min(limit, 50), "filters": {}},
         )
-    ):
-        return Intent(intent_type=IntentType.COUNT_VIDEOS_ALL, params={})
 
+    # Всё остальное → LLM
     return Intent(intent_type=IntentType.UNKNOWN, params={})

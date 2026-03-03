@@ -2,63 +2,167 @@ from __future__ import annotations
 
 from src.parser.intents import Intent, IntentType
 
+# ─── Вайтлисты (защита от SQL injection) ─────────────────────────────────────
+
+ALLOWED_METRICS: dict[str, set[str]] = {
+    "videos": {
+        "*",
+        "video_id",
+        "views_count",
+        "likes_count",
+        "comments_count",
+        "reports_count",
+    },
+    "video_snapshots": {
+        "*",
+        "video_id",
+        "views_count",
+        "likes_count",
+        "comments_count",
+        "reports_count",
+        "delta_views_count",
+        "delta_likes_count",
+        "delta_comments_count",
+        "delta_reports_count",
+    },
+}
+
+ALLOWED_OPERATIONS: set[str] = {"SUM", "COUNT", "COUNT_DISTINCT", "AVG", "MAX", "MIN"}
+
+ALLOWED_FILTER_FIELDS: dict[str, set[str]] = {
+    "videos": {"views_count", "likes_count", "comments_count", "reports_count"},
+    "video_snapshots": {
+        "views_count",
+        "likes_count",
+        "comments_count",
+        "reports_count",
+        "delta_views_count",
+        "delta_likes_count",
+        "delta_comments_count",
+        "delta_reports_count",
+    },
+}
+
+DATE_FIELD: dict[str, str] = {
+    "videos": "video_created_at",
+    "video_snapshots": "created_at",
+}
+
+ALLOWED_TABLES: set[str] = {"videos", "video_snapshots"}
+
+
+# ─── Вспомогательные функции ──────────────────────────────────────────────────
+
+def _validate(table: str, operation: str, metric: str) -> None:
+    if table not in ALLOWED_TABLES:
+        raise ValueError(f"Unknown table: {table!r}")
+    if operation not in ALLOWED_OPERATIONS:
+        raise ValueError(f"Unknown operation: {operation!r}")
+    if metric not in ALLOWED_METRICS[table]:
+        raise ValueError(f"Unknown metric {metric!r} for table {table!r}")
+
+
+def _build_where(
+    table: str,
+    filters: dict,
+    param_offset: int = 1,
+) -> tuple[str, list, int]:
+    """Возвращает (WHERE clause, список значений, следующий индекс параметра)."""
+    conditions: list[str] = []
+    values: list = []
+    i = param_offset
+    date_col = DATE_FIELD[table]
+
+    creator_id = filters.get("creator_id")
+    if creator_id:
+        conditions.append(f"creator_id = ${i}")
+        values.append(str(creator_id))
+        i += 1
+
+    video_id = filters.get("video_id")
+    if video_id:
+        conditions.append(f"video_id = ${i}")
+        values.append(str(video_id))
+        i += 1
+
+    date_from = filters.get("date_from")
+    if date_from is not None:
+        conditions.append(f"{date_col} >= ${i}")
+        values.append(date_from)
+        i += 1
+
+    date_to = filters.get("date_to")
+    if date_to is not None:
+        # date_to уже сдвинут на +1 день при парсинге (эксклюзивный конец)
+        conditions.append(f"{date_col} < ${i}")
+        values.append(date_to)
+        i += 1
+
+    filter_field = filters.get("filter_field")
+    filter_gt = filters.get("filter_gt")
+    if filter_field is not None and filter_gt is not None:
+        if filter_field not in ALLOWED_FILTER_FIELDS[table]:
+            raise ValueError(f"Unknown filter_field: {filter_field!r}")
+        conditions.append(f"{filter_field} > ${i}")
+        values.append(int(filter_gt))
+        i += 1
+
+    # delta_gt=0 для COUNT_DISTINCT с delta
+    delta_gt = filters.get("delta_gt")
+    delta_gt_field = filters.get("delta_gt_field")
+    if delta_gt is not None and delta_gt_field:
+        if delta_gt_field not in ALLOWED_FILTER_FIELDS[table]:
+            raise ValueError(f"Unknown delta_gt_field: {delta_gt_field!r}")
+        conditions.append(f"{delta_gt_field} > ${i}")
+        values.append(int(delta_gt))
+        i += 1
+
+    where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+    return where, values, i
+
+
+# ─── Основная функция построения запроса ─────────────────────────────────────
 
 def build_query(intent: Intent) -> tuple[str, tuple]:
-    intent_type = intent.intent_type
+    itype = intent.intent_type
     params = intent.params
 
-    if intent_type == IntentType.COUNT_VIDEOS_ALL:
-        return "SELECT COUNT(*)::bigint FROM videos;", ()
+    if itype == IntentType.AGGREGATE:
+        operation: str = params["operation"]
+        metric: str = params["metric"]
+        table: str = params["table"]
+        filters: dict = params.get("filters", {})
 
-    if intent_type == IntentType.SUM_VIEWS_ALL:
-        return "SELECT COALESCE(SUM(views_count), 0)::bigint FROM videos;", ()
+        _validate(table, operation, metric)
 
-    if intent_type == IntentType.COUNT_VIDEOS_CREATOR_DATE_RANGE:
-        return (
-            """
-            SELECT COUNT(*)::bigint
-            FROM videos
-            WHERE creator_id = $1
-              AND video_created_at >= $2
-              AND video_created_at < $3;
-            """,
-            (params["creator_id"], params["start"], params["end"]),
-        )
+        if operation == "COUNT_DISTINCT":
+            select = f"SELECT COUNT(DISTINCT {metric})"
+        elif metric == "*":
+            select = f"SELECT {operation}(*)"
+        else:
+            select = f"SELECT {operation}({metric})"
 
-    if intent_type == IntentType.COUNT_VIDEOS_VIEWS_GT:
-        return (
-            """
-            SELECT COUNT(*)::bigint
-            FROM videos
-            WHERE views_count > $1;
-            """,
-            (params["threshold"],),
-        )
+        where, values, _ = _build_where(table, filters)
+        query = f"{select}::bigint FROM {table}{where};"
+        return query, tuple(values)
 
-    if intent_type == IntentType.SUM_DELTA_VIEWS_DAY:
-        return (
-            """
-            SELECT COALESCE(SUM(delta_views_count), 0)::bigint
-            FROM video_snapshots
-            WHERE created_at >= $1
-              AND created_at < $2;
-            """,
-            (params["start"], params["end"]),
-        )
+    if itype == IntentType.TOP_N:
+        metric: str = params["metric"]
+        table: str = params.get("table", "videos")
+        limit: int = int(params["limit"])
+        filters: dict = params.get("filters", {})
 
-    if intent_type == IntentType.COUNT_DISTINCT_VIDEOS_WITH_NEW_VIEWS_DAY:
-        return (
-            """
-            SELECT COUNT(DISTINCT video_id)::bigint
-            FROM video_snapshots
-            WHERE created_at >= $1
-              AND created_at < $2
-              AND delta_views_count > 0;
-            """,
-            (params["start"], params["end"]),
-        )
+        if table not in ALLOWED_TABLES:
+            raise ValueError(f"Unknown table: {table!r}")
+        if metric not in ALLOWED_METRICS[table] - {"*"}:
+            raise ValueError(f"Unknown metric {metric!r} for TOP_N")
 
-    if intent_type == IntentType.VIDEO_DATE_RANGE:
+        where, values, i = _build_where(table, filters)
+        values.append(limit)
+        query = f"SELECT video_id, {metric} FROM {table}{where} ORDER BY {metric} DESC LIMIT ${i};"
+        return query, tuple(values)
+
+    if itype == IntentType.VIDEO_DATE_RANGE:
         return (
             """
             SELECT
@@ -69,4 +173,4 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
             (),
         )
 
-    raise ValueError(f"Unsupported intent type: {intent_type}")
+    raise ValueError(f"Unsupported intent type: {itype}")

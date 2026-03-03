@@ -104,7 +104,10 @@ def _build_where(
     hour_from = filters.get("hour_from")
     hour_to = filters.get("hour_to")
     if hour_from is not None and hour_to is not None:
-        conditions.append(f"EXTRACT(HOUR FROM {date_col}) BETWEEN ${i} AND ${i + 1}")
+        # "с 10:00 до 15:00" → hour>=10 AND hour<15 (верхняя граница исключительно)
+        conditions.append(
+            f"EXTRACT(HOUR FROM {date_col}) >= ${i} AND EXTRACT(HOUR FROM {date_col}) < ${i + 1}"
+        )
         values.extend([int(hour_from), int(hour_to)])
         i += 2
 
@@ -188,7 +191,10 @@ def _build_join_where_snapshots(
     hour_from = filters.get("hour_from")
     hour_to = filters.get("hour_to")
     if hour_from is not None and hour_to is not None:
-        conditions.append(f"EXTRACT(HOUR FROM vs.created_at) BETWEEN ${i} AND ${i + 1}")
+        # "с 10:00 до 15:00" → hour>=10 AND hour<15 (верхняя граница исключительно)
+        conditions.append(
+            f"EXTRACT(HOUR FROM vs.created_at) >= ${i} AND EXTRACT(HOUR FROM vs.created_at) < ${i + 1}"
+        )
         values.extend([int(hour_from), int(hour_to)])
         i += 2
 

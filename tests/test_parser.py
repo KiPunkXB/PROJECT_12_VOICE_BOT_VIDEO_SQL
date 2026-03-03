@@ -28,10 +28,10 @@ def test_count_videos_all_15_variants() -> None:
 
 
 def test_creator_range_intent() -> None:
-    text = "Сколько видео у креатора с id 42 вышло с 1 по 5 ноября 2025 включительно?"
+    text = "Сколько видео у креатора с id aca1061a9d324ecf8c3fa2bb32d7be63 вышло с 1 по 5 ноября 2025 включительно?"
     intent = parse_intent(text)
     assert intent.intent_type == IntentType.COUNT_VIDEOS_CREATOR_DATE_RANGE
-    assert intent.params["creator_id"] == 42
+    assert intent.params["creator_id"] == "aca1061a9d324ecf8c3fa2bb32d7be63"
 
 
 def test_views_gt_intent() -> None:
@@ -51,4 +51,3 @@ def test_distinct_with_new_views_day_intent() -> None:
     text = "Сколько разных видео получали новые просмотры 27 ноября 2025?"
     intent = parse_intent(text)
     assert intent.intent_type == IntentType.COUNT_DISTINCT_VIDEOS_WITH_NEW_VIEWS_DAY
-

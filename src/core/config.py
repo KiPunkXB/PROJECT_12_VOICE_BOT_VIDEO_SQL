@@ -15,7 +15,7 @@ def get_settings() -> Settings:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     database_url = os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:postgres@localhost:5432/video_analytics",
+        "postgresql://postgres:postgres@localhost:15432/video_analytics",
     )
     timeout_raw = os.getenv("SQL_TIMEOUT_SECONDS", "2")
     timeout = float(timeout_raw)
@@ -24,4 +24,3 @@ def get_settings() -> Settings:
         database_url=database_url,
         sql_timeout_seconds=timeout,
     )
-

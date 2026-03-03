@@ -50,6 +50,26 @@ def parse_single_date(text: str) -> tuple[datetime, datetime] | None:
 
 
 def parse_date_range(text: str) -> tuple[datetime, datetime] | None:
+    # Example: "с 28 мая 2025 по 30 ноября 2025"
+    full_pattern = (
+        r"с\s+(\d{1,2})\s+"
+        r"(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+"
+        r"(\d{4})\s+по\s+(\d{1,2})\s+"
+        r"(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+"
+        r"(\d{4})"
+    )
+    full_match = re.search(full_pattern, text)
+    if full_match:
+        day_start = int(full_match.group(1))
+        month_start = MONTHS_RU[full_match.group(2)]
+        year_start = int(full_match.group(3))
+        day_end = int(full_match.group(4))
+        month_end = MONTHS_RU[full_match.group(5)]
+        year_end = int(full_match.group(6))
+        start = datetime(year_start, month_start, day_start)
+        end = datetime(year_end, month_end, day_end) + timedelta(days=1)
+        return start, end
+
     # Example: "с 1 по 5 ноября 2025"
     pattern = r"с\s+(\d{1,2})\s+по\s+(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})"
     match = re.search(pattern, text)
@@ -64,16 +84,16 @@ def parse_date_range(text: str) -> tuple[datetime, datetime] | None:
     return parse_single_date(text)
 
 
-def extract_creator_id(text: str) -> int | None:
+def extract_creator_id(text: str) -> str | None:
     patterns = [
-        r"креатор[а-я\s]*id\s*[:=]?\s*(\d+)",
-        r"creator_id\s*[:=]?\s*(\d+)",
-        r"id\s*[:=]?\s*(\d+)",
+        r"креатор[а-я\s]*id\s*[:=]?\s*([a-z0-9-]+)",
+        r"creator_id\s*[:=]?\s*([a-z0-9-]+)",
+        r"id\s*[:=]?\s*([a-z0-9-]+)",
     ]
     for pattern in patterns:
         match = re.search(pattern, text)
         if match:
-            return int(match.group(1))
+            return str(match.group(1))
     return None
 
 
@@ -128,11 +148,15 @@ def parse_intent(text: str) -> Intent:
 
     # Rule 5: COUNT_VIDEOS_ALL
     if (
-        "сколько всего видео" in normalized
-        or "всего видео" in normalized
-        or "сколько видео есть в системе" in normalized
+        "сколько" in normalized
+        and ("видео" in normalized or "ролик" in normalized or "роликов" in normalized)
+        and (
+            "всего" in normalized
+            or "всех" in normalized
+            or "есть в системе" in normalized
+            or "имеется" in normalized
+        )
     ):
         return Intent(intent_type=IntentType.COUNT_VIDEOS_ALL, params={})
 
     return Intent(intent_type=IntentType.UNKNOWN, params={})
-

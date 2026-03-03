@@ -7,7 +7,8 @@ from src.parser.intents import Intent, IntentType
 ALLOWED_METRICS: dict[str, set[str]] = {
     "videos": {
         "*",
-        "video_id",
+        "id",
+        "creator_id",
         "views_count",
         "likes_count",
         "comments_count",
@@ -156,7 +157,8 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
 
         if table not in ALLOWED_TABLES:
             raise ValueError(f"Unknown table: {table!r}")
-        if metric not in ALLOWED_METRICS[table] - {"*"}:
+        _top_n_excluded = {"*", "id", "creator_id"}
+        if metric not in ALLOWED_METRICS[table] - _top_n_excluded:
             raise ValueError(f"Unknown metric {metric!r} for TOP_N")
 
         where, values, i = _build_where(table, filters)

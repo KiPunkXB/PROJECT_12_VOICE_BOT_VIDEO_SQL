@@ -109,6 +109,12 @@ SYSTEM_PROMPT = """Ты NLU-парсер запросов к аналитике 
 Запрос: "сколько видео с просмотрами больше 100000"
 {"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"filter_field":"views_count","filter_gt":100000}}
 
+Запрос: "сколько всего креаторов"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"creator_id","table":"videos","filters":{}}
+
+Запрос: "сколько уникальных авторов"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"creator_id","table":"videos","filters":{}}
+
 Запрос: "суммарные просмотры всех видео"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{}}
 
@@ -206,7 +212,7 @@ def _payload_to_intent(payload: dict[str, Any]) -> Intent:
 
         if table not in ALLOWED_METRICS:
             return _UNKNOWN_INTENT
-        allowed_top_metrics = ALLOWED_METRICS[table] - {"*"}
+        allowed_top_metrics = ALLOWED_METRICS[table] - {"*", "id", "creator_id"}
         if metric not in allowed_top_metrics:
             return _UNKNOWN_INTENT
 

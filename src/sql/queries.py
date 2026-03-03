@@ -81,7 +81,9 @@ def _build_where(
 
     video_id = filters.get("video_id")
     if video_id:
-        conditions.append(f"video_id = ${i}")
+        # В таблице videos первичный ключ называется "id", в video_snapshots — "video_id"
+        id_col = "id" if table == "videos" else "video_id"
+        conditions.append(f"{id_col} = ${i}")
         values.append(str(video_id))
         i += 1
 
@@ -159,7 +161,9 @@ def build_query(intent: Intent) -> tuple[str, tuple]:
 
         where, values, i = _build_where(table, filters)
         values.append(limit)
-        query = f"SELECT video_id, {metric} FROM {table}{where} ORDER BY {metric} DESC LIMIT ${i};"
+        # В videos первичный ключ — "id", делаем алиас video_id для единообразия
+        id_select = "id AS video_id" if table == "videos" else "video_id"
+        query = f"SELECT {id_select}, {metric} FROM {table}{where} ORDER BY {metric} DESC LIMIT ${i};"
         return query, tuple(values)
 
     if itype == IntentType.VIDEO_DATE_RANGE:

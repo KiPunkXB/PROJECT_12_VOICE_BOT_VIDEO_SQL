@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
+
+logger = logging.getLogger(__name__)
 
 from src.core.config import Settings
 from src.bot.formatting import format_numeric_response, format_top_n
@@ -56,12 +59,18 @@ def build_router(pool, settings: Settings) -> Router:
     @router.message()
     async def query_handler(message: Message) -> None:
         text = message.text or ""
-        intent = await parse_intent_hybrid(text, settings)
-        value = await execute_intent(
-            pool=pool,
-            intent=intent,
-            sql_timeout_seconds=settings.sql_timeout_seconds,
-        )
+        try:
+            intent = await parse_intent_hybrid(text, settings)
+            value = await execute_intent(
+                pool=pool,
+                intent=intent,
+                sql_timeout_seconds=settings.sql_timeout_seconds,
+            )
+        except Exception as exc:
+            logger.exception("query_handler error for text=%r: %s", text, exc)
+            await message.answer("⚠️ Не удалось выполнить запрос. Попробуй переформулировать.")
+            return
+
         if isinstance(value, list):
             await message.answer(format_top_n(value))
         elif isinstance(value, (int, float)):

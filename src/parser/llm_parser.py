@@ -113,9 +113,6 @@ UNKNOWN:
 Запрос: "сколько видео в августе 2025"
 {"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"date_from":"2025-08-01","date_to":"2025-08-31"}}
 
-Запрос: "скока видосов в октябре"
-{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"date_from":"2025-10-01","date_to":"2025-10-31"}}
-
 Запрос: "сколько видео в мае и октябре"
 {"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"videos","filters":{"date_from":"2025-05-01","date_to":"2025-10-31"}}
 
@@ -143,16 +140,7 @@ UNKNOWN:
 Запрос: "сколько лайков в системе"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{}}
 
-Запрос: "сколько просмотров на платформе"
-{"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{}}
-
 Запрос: "сколько жалоб в системе за ноябрь"
-{"intent_type":"AGGREGATE","operation":"SUM","metric":"reports_count","table":"videos","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
-
-Запрос: "сколько лайков всего"
-{"intent_type":"AGGREGATE","operation":"SUM","metric":"likes_count","table":"videos","filters":{}}
-
-Запрос: "сколько жалоб за ноябрь 2025"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"reports_count","table":"videos","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
 
 Запрос: "сколько комментариев у видео ecd8a4e4-1f24"
@@ -218,9 +206,6 @@ UNKNOWN:
 Запрос: "сколько жалоб заработал xyz"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"reports_count","table":"videos","filters":{"creator_id":"xyz"}}
 
-Запрос: "сколько просмотров собрал abc"
-{"intent_type":"AGGREGATE","operation":"SUM","metric":"views_count","table":"videos","filters":{"creator_id":"abc"}}
-
 Запрос: "сколько комментариев у автора abc за октябрь"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"comments_count","table":"videos","filters":{"creator_id":"abc","date_from":"2025-10-01","date_to":"2025-10-31"}}
 
@@ -231,9 +216,6 @@ UNKNOWN:
 {"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"SUM","metric":"likes_count","table":"videos","filters":{}}
 
 Запрос: "какой создатель выпустил больше всего видео"
-{"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"COUNT","metric":"*","table":"videos","filters":{}}
-
-Запрос: "самый продуктивный автор"
 {"intent_type":"LOOKUP_ID","id_field":"creator_id","aggregate":"COUNT","metric":"*","table":"videos","filters":{}}
 
 Запрос: "какой автор получил больше всего жалоб"
@@ -265,9 +247,6 @@ UNKNOWN:
 
 Запрос: "сколько уникальных видео имели отрицательный прирост лайков"
 {"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"video_id","table":"video_snapshots","filters":{"filter_lt_field":"delta_likes_count","filter_lt_value":0}}
-
-Запрос: "сколько замеров где число просмотров за час стало меньше"
-{"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"filter_lt_field":"delta_views_count","filter_lt_value":0}}
 
 Запрос: "сколько раз прирост лайков был отрицательным"
 {"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"filter_lt_field":"delta_likes_count","filter_lt_value":0}}
@@ -308,9 +287,6 @@ UNKNOWN:
 Запрос: "суммарный прирост просмотров автора abc с 10:00 до 15:00 28 ноября 2025"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_views_count","table":"video_snapshots","filters":{"creator_id":"abc","date_from":"2025-11-28","date_to":"2025-11-28","hour_from":10,"hour_to":15}}
 
-Запрос: "на сколько выросли просмотры видео автора xyz с 9 до 18 часов 1 ноября 2025"
-{"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_views_count","table":"video_snapshots","filters":{"creator_id":"xyz","date_from":"2025-11-01","date_to":"2025-11-01","hour_from":9,"hour_to":18}}
-
 Запрос: "прирост лайков с 10:00 до 15:00 28 ноября"
 {"intent_type":"AGGREGATE","operation":"SUM","metric":"delta_likes_count","table":"video_snapshots","filters":{"date_from":"2025-11-28","date_to":"2025-11-28","hour_from":10,"hour_to":15}}
 
@@ -335,9 +311,6 @@ UNKNOWN:
 Запрос: "среднее количество замеров на видео"
 {"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{}}
 
-Запрос: "сколько в среднем замеров приходится на одно видео"
-{"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{}}
-
 Запрос: "среднее число замеров за ноябрь на видео"
 {"intent_type":"AGGREGATE","operation":"AVG","metric":"snapshot_count","table":"video_snapshots","filters":{"date_from":"2025-11-01","date_to":"2025-11-30"}}
 
@@ -346,9 +319,6 @@ UNKNOWN:
 
 Запрос: "когда было опубликовано видео abc1-2345-6789-abcd-000000000000"
 {"intent_type":"AGGREGATE","operation":"MIN","metric":"video_created_at","table":"videos","filters":{"video_id":"abc1-2345-6789-abcd-000000000000"}}
-
-Запрос: "дата публикации видео fde42b07-37f4-4db7-95b4-d850a5e78693"
-{"intent_type":"AGGREGATE","operation":"MIN","metric":"video_created_at","table":"videos","filters":{"video_id":"fde42b07-37f4-4db7-95b4-d850a5e78693"}}
 
 Запрос: "когда вышло видео ecd8a4e4-1f24-4b0a-9c3d-000000000000"
 {"intent_type":"AGGREGATE","operation":"MIN","metric":"video_created_at","table":"videos","filters":{"video_id":"ecd8a4e4-1f24-4b0a-9c3d-000000000000"}}

@@ -11,7 +11,7 @@ rules/
 plan/
 specs/
 docs/
-scripts/
+
 
 # Explicit file name bans
 **/RULS_CURRENT.md

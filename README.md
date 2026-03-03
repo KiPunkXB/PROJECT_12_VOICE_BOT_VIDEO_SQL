@@ -30,8 +30,22 @@ copy .env.example .env
 - No dialogue context storage.
 - Deterministic parser in MVP (no LLM required).
 
+## Bot UX
+- `/start` -> friendly intro with examples.
+- `/help` -> short usage guide.
+- Any regular text query -> numeric result only.
+
 ## Checker-like local smoke
 ```bash
 .venv\Scripts\python scripts\smoke_bot.py
 ```
 
+## Precheck before /check
+```bash
+.venv\Scripts\python scripts\precheck.py --skip-telegram
+```
+
+For full validation (with Telegram token check):
+```bash
+.venv\Scripts\python scripts\precheck.py
+```

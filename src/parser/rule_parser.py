@@ -98,6 +98,13 @@ def normalize_text(text: str) -> str:
     normalized = re.sub(r"\bоного\b", "одного", normalized)
     normalized = re.sub(r"\bсредем\b", "среднем", normalized)
 
+    # "впросотмров" и похожие опечатки "просмотров" (начинаются с "впрос")
+    normalized = re.sub(r"\bвпрос\w{2,}", "просмотров", normalized)
+    # "наибольшее/наибольший" → "максимальн"
+    normalized = re.sub(r"\bнаибольш\w*", "максимальн", normalized)
+    # "самое большее/наибольшее число X" → синоним MAX
+    normalized = re.sub(r"\bсамое\s+больш\w+", "максимальн", normalized)
+
     # normalize threshold spellings like 100k, 100к -> 100000
     normalized = re.sub(r"(\d+)\s*[kк]\b", lambda m: str(int(m.group(1)) * 1000), normalized)
     return normalized

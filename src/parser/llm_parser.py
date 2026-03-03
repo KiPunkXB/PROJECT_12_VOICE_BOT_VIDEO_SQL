@@ -227,6 +227,12 @@ UNKNOWN:
 Запрос: "сколько замеров где прирост просмотров отрицательный"
 {"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"filter_lt_field":"delta_views_count","filter_lt_value":0}}
 
+Запрос: "сколько уникальных видео хотя бы раз показали отрицательный прирост просмотров"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"video_id","table":"video_snapshots","filters":{"filter_lt_field":"delta_views_count","filter_lt_value":0}}
+
+Запрос: "сколько уникальных видео имели отрицательный прирост лайков"
+{"intent_type":"AGGREGATE","operation":"COUNT_DISTINCT","metric":"video_id","table":"video_snapshots","filters":{"filter_lt_field":"delta_likes_count","filter_lt_value":0}}
+
 Запрос: "сколько замеров где число просмотров за час стало меньше"
 {"intent_type":"AGGREGATE","operation":"COUNT","metric":"*","table":"video_snapshots","filters":{"filter_lt_field":"delta_views_count","filter_lt_value":0}}
 

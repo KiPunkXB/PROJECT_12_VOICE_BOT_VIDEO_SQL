@@ -51,11 +51,14 @@ def format_top_creators(rows: list[dict]) -> str:
 def format_time_series(rows: list[dict]) -> str:
     metric = rows[0].get("_metric", "")
     label = _METRIC_LABELS.get(metric, metric)
-    header = f"Динамика ({label}) по дням:"
+    order = rows[0].get("_order", "ASC")
+    if len(rows) == 1 and order == "DESC":
+        header = f"Максимальный день по {label}:"
+    else:
+        header = f"Динамика ({label}) по дням:"
     lines = [header]
     for row in rows:
-        day = str(row["day"])[:10]  # YYYY-MM-DD -> DD part shown below
-        # Reformat YYYY-MM-DD to DD.MM
+        day = str(row["day"])[:10]
         try:
             parts = day.split("-")
             day_fmt = f"{parts[2]}.{parts[1]}"

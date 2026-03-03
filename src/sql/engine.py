@@ -53,8 +53,9 @@ async def execute_intent(
             if not rows:
                 return "Нет данных"
             metric = intent.params.get("metric", "")
+            order = intent.params.get("order", "ASC")
             return [
-                {"day": str(r["day"]), "value": int(r["value"]), "_result_type": "time_series", "_metric": metric}
+                {"day": str(r["day"]), "value": int(r["value"]), "_result_type": "time_series", "_metric": metric, "_order": order}
                 for r in rows
             ]
 

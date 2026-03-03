@@ -66,7 +66,7 @@ Rules:
 14) "топ N авторов по X" (explicit N or plural "авторов") → TOP_CREATORS. Single "какой автор" → LOOKUP_ID.
 15) "динамика / по дням / прирост по дням" → TIME_SERIES (date_from+date_to required). "В какой день макс" → TIME_SERIES limit=1 order=DESC.
 16) "статистика/покажи/расскажи про видео <UUID>" → VIDEO_DETAIL with video_id.
-17) TIME_SERIES without dates → UNKNOWN.
+17) TIME_SERIES с limit=null без дат → UNKNOWN. TIME_SERIES с limit=1 (поиск дня с максимумом/минимумом) БЕЗ ДАТ допустимо — filters={}.
 
 Examples:
 "какой создатель выпустил больше всего видео"
@@ -134,6 +134,15 @@ Examples:
 
 "самый активный день по лайкам за октябрь"
 {"intent_type":"TIME_SERIES","metric":"delta_likes_count","filters":{"date_from":"2025-10-01","date_to":"2025-10-31"},"limit":1,"order":"DESC"}
+
+"в какой день самое большое число просмотров"
+{"intent_type":"TIME_SERIES","metric":"delta_views_count","filters":{},"limit":1,"order":"DESC"}
+
+"в какой день больше всего просмотров"
+{"intent_type":"TIME_SERIES","metric":"delta_views_count","filters":{},"limit":1,"order":"DESC"}
+
+"в какой день было максимальное число лайков"
+{"intent_type":"TIME_SERIES","metric":"delta_likes_count","filters":{},"limit":1,"order":"DESC"}
 
 "динамика без дат"
 {"intent_type":"UNKNOWN"}

@@ -471,4 +471,29 @@ def parse_intent(text: str) -> Intent:
                 },
             )
 
+    # Rule 12: "в какой день максимальный/минимальный прирост X" → TIME_SERIES limit=1
+    if "в какой день" in normalized and (
+        "максимальн" in normalized
+        or "больше всего" in normalized
+        or "минимальн" in normalized
+        or "меньше всего" in normalized
+    ):
+        order = "ASC" if ("минимальн" in normalized or "меньше всего" in normalized) else "DESC"
+        metric = "delta_views_count"
+        if "лайк" in normalized:
+            metric = "delta_likes_count"
+        elif "коммент" in normalized:
+            metric = "delta_comments_count"
+        elif "жалоб" in normalized:
+            metric = "delta_reports_count"
+        filters: dict = {}
+        month_range = parse_month_range_any_case(normalized)
+        if month_range is not None:
+            start, end = month_range
+            filters = {"date_from": start, "date_to": end}
+        return Intent(
+            intent_type=IntentType.TIME_SERIES,
+            params={"metric": metric, "filters": filters, "limit": 1, "order": order},
+        )
+
     return Intent(intent_type=IntentType.UNKNOWN, params={})
